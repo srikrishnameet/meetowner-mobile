@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "236154467914",
+    "project_id": "meetownerin-2aa7b",
+    "storage_bucket": "meetownerin-2aa7b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:236154467914:android:796ade22fe033c0c8858b3",
+        "android_client_info": {
+          "package_name": "com.meetowner.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBVe3xkYhXUNXA1gcmoxybf-EeZUdzIaD4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
