@@ -121,7 +121,7 @@ export default function PropertyDetails({ navigation }) {
       const cachedPhotos = await AsyncStorage.getItem(getCacheKey());
       if (cachedPhotos) {
         const parsedPhotos = JSON.parse(cachedPhotos);
-        console.log('Loaded photos from cache:', parsedPhotos);
+    
         setPhotos(parsedPhotos);
         setIsPhotosLoading(false);
         return; // Exit if cache is found
@@ -132,7 +132,7 @@ export default function PropertyDetails({ navigation }) {
         `https://api.meetowner.in/property/getpropertyphotos?unique_property_id=${property?.unique_property_id}`
       );
       const data = await response.json();
-      console.log('Project Photos Data:', data);
+   
       if (data && data.status === 'success' && data.images && data.images.length > 0) {
         const imageUrls = data.images.map((image) => image.url);
        
@@ -346,7 +346,7 @@ export default function PropertyDetails({ navigation }) {
       <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.section}>
      
-          {console.log('Rendering Project Photos, photos:', photos, 'isPhotosLoading:', isPhotosLoading)}
+     
           {isPhotosLoading ? (
             <SkeletonLoader />
           ) : photos.length > 0 ? (

@@ -44,7 +44,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { shallowEqual, useDispatch, useSelector } from "react-redux";
 import { addFavourite } from "../../../store/slices/favourites";
 import { setPropertyDetails } from "../../../store/slices/propertyDetails";
-import { MaterialIcons } from "@expo/vector-icons";
+
 import config from "../../../config";
 import {
   setCities,
@@ -56,6 +56,20 @@ import RadioGroup from "react-native-radio-buttons-group";
 import axios from "axios";
 import ShareDetailsModal from "./ShareDetailsModal";
 import { BackHandler } from "react-native";
+import UserAvatar from "./propertyDetailsComponents/UserAvatar";
+import WhatsAppIcon from '../../../assets/propertyicons/whatsapp.png';
+import ApprovedIcon from '../../../assets/propertyicons/approved.png';
+import SearchBarProperty from "./propertyDetailsComponents/SearchBarProperty";
+
+
+const userTypeMap = {
+  3: "Builder",
+  4: "Agent",
+  5: "Owner",
+  6: "Channel Partner",
+};
+
+
 const PropertyCard = memo(
   ({ item, onFav, onNavigate, userDetails, enquireNow }) => {
     const area = item.builtup_area
@@ -82,17 +96,11 @@ const PropertyCard = memo(
       }
     };
     return (
+      <View  style={styles.containerVstack}>
       <Pressable
-        bg="white"
-        rounded="lg"
-        shadow={3}
-        overflow="hidden"
-        mb={4}
-        borderWidth={1}
-        borderColor="gray.200"
         onPress={() => onNavigate(item)}
       >
-        <HStack space={3} alignItems="flex-start" p={2} py={2}>
+        <VStack  alignItems="flex-start">
           <Image
             source={{
               uri:
@@ -101,139 +109,132 @@ const PropertyCard = memo(
                   : `https://placehold.co/200x100@3x.png?text=${item?.property_name}`,
             }}
             alt="Property Image"
-            w={160}
-            h={130}
+            w={400}
+            h={200}
             resizeMode="cover"
-            rounded="lg"
+          
+            style={{borderTopLeftRadius:20,borderTopRightRadius:20}}
           />
-          <VStack flex={1} space={0.5}>
-            <HStack justifyContent="space-between" alignItems="center">
-              <Text fontSize="md" bold color="#1D3A76" numberOfLines={1}>
-                {item.property_name || "N/A"}
-              </Text>
-            </HStack>
-            <HStack
-              justifyContent={"space-between"}
-              space={1}
-              alignItems="center"
-            >
-              <Text fontSize="md" bold color="#FBAF01">
-                ₹ {formatToIndianCurrency(item.property_cost || 0)}
-              </Text>
+          <HStack>
+             <Text style={styles.possesionText}>
+                          {item?.occupancy === 'Ready to move'
+                            ? 'Ready to move'
+                            : item?.under_construction
+                            ? `Possession by ${new Date(item.under_construction).toLocaleDateString('en-GB', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric',
+                              })}`
+                            : 'N/A'}
+                        </Text>
+                        <Text style={styles.possesionText}>|</Text>
+                        <Text style={styles.possesionText}>
+                         {area}
+                      </Text>
+             </HStack>
+            <VStack  style={styles.contentContainer}>
+              <HStack justifyContent="space-between" alignItems="center">
+                <Text  style={styles.propertyText} >
+                  {item.property_name || "N/A"}
+                </Text>
+                <HStack
+                  space={1}
+                  alignItems="center"
+                  px={2}
+                  py={0.5}
+                  justifyContent="center"
+                >
+                  <Image
+                    source={ApprovedIcon}
+                    size={18}
+                    color={
+                       "green" 
+                    }
+                  />
+                  <Text
+                    fontSize="12"
+                   style={{ fontFamily:'PoppinsSemiBold',}}
+                    color={
+                    "green.600"
+
+                    }
+                    thin
+                  >
+                    { "Verified"}
+                  </Text>
+                </HStack>
+              </HStack>
               <HStack
+                justifyContent={"space-between"}
                 space={1}
                 alignItems="center"
-                borderWidth={0.5}
-                borderColor={
-                  item.property_status === 1
-                    ? "green.300"
-                    : item.property_status === 0
-                    ? "#f7d716"
-                    : "blue.300"
-                }
-                bg={
-                  item.property_status === 1
-                    ? "green.100"
-                    : item.property_status === 0
-                    ? "#f7d716"
-                    : "blue.100"
-                }
-                px={2}
-                py={0.5}
-                borderRadius={30}
-                justifyContent="center"
               >
-                <Ionicons
-                  name={
-                    item.property_status === 1
-                      ? "checkmark-circle"
-                      : item.property_status === 0
-                      ? "time-outline"
-                      : "alert-circle"
-                  }
-                  size={14}
-                  color={
-                    item.property_status === 1
-                      ? "green"
-                      : item.property_status === 0
-                      ? "black"
-                      : "blue"
-                  }
-                />
-                <Text
-                  fontSize="xs"
-                  color={
-                    item.property_status === 1
-                      ? "green.600"
-                      : item.property_status === 0
-                      ? "black"
-                      : "blue.600"
-                  }
-                  thin
-                >
-                  {item.property_status === 1
-                    ? "Verified"
-                    : item.property_status === 0
-                    ? "Pending"
-                    : "In Review"}
+                <Text style={styles.propertyText}>
+                  ₹ {formatToIndianCurrency(item.property_cost || 0)}
                 </Text>
               </HStack>
-            </HStack>
-            <Text fontSize="xs" color="gray.500">
-              {item.property_in || "N/A"} | {item.sub_type || "N/A"}
-            </Text>
-            {item.facing && (
-              <Text fontSize="xs" color="gray.500">
-                Facing: {item.facing}
+              <Text style={styles.propertyText}>
+                {item.property_in || "N/A"} | {item.sub_type || "N/A"}
               </Text>
-            )}
-            <Text fontSize="xs" color="gray.500">
-              Area: {area}
-            </Text>
-            <Text fontSize="xs" color="gray.500" numberOfLines={1}>
-              Location: {item.google_address || "N/A"}
-            </Text>
-          </VStack>
-        </HStack>
+            </VStack>
+        </VStack>
         <HStack
-          justifyContent="space-between"
-          space={2}
-          py={1.5}
-          mb={1.5}
-          px={2}
-          bg="gray.50"
-        >
-          {["Schedule Visit", "Contact Seller", "interest"].map((type) => (
-            <Pressable
-              key={type}
-              flex={1}
-              bg="#1D3A76"
-              py={1.5}
-              rounded="lg"
-              alignItems="center"
-              onPress={async () => {
-                const actionType = mapActionType(type);
-                if (actionType === "schedulevisit") {
-                  await enquireNow(actionType, item, 1);
-                } else {
-                  await onFav(actionType, item, 1);
-                }
+      justifyContent="space-between"
+      space={2}
+      py={3}
+      mb={1.5}
+      px={2}
+      style={{ borderTopWidth: 2, borderTopColor: "#f5f5f5" }}
+      alignItems="center"
+    >
+      {/* UserAvatar: 2/8 space */}
+        <Box flex={0.20} alignItems="flex-start">
+          <UserAvatar item={item} size={24} />
+        </Box>
 
-                setSubmittedActions((prev) => ({
-                  ...prev,
-                  [`${item.unique_property_id}_${type}`]: true,
-                }));
-              }}
-            >
-              <Text color="white" fontSize="xs" bold>
-                {submittedActions[`${item.unique_property_id}_${type}`]
-                  ? "Submitted"
-                  : type}
-              </Text>
-            </Pressable>
-          ))}
+      {/* VStack for name and user type: 4/8 space */}
+        <VStack flex={0.5} justifyContent="center">
+          <Text
+            style={styles.username}
+            numberOfLines={2} 
+            ellipsizeMode="tail" 
+          >
+            {item?.user?.name || "Unknown"}
+          </Text>
+          <Text style={styles.userType}>{userTypeMap[item?.user?.user_type] || "Unknown"}</Text>
+        </VStack>
+
+      {/* WhatsApp Button: 2/8 space */}
+      <Pressable style={styles.whatsbuttonStyles} flex={0.25}>
+        <HStack space={1} alignItems="center" justifyContent="center">
+          <Image
+            source={WhatsAppIcon}
+            alt="WhatsApp Icon"
+            width={5}
+            height={5}
+            resizeMode="contain"
+          />
+          <Text style={styles.WhatsbuttonsText}>Chat</Text>
         </HStack>
       </Pressable>
+
+      {/* Contact Button: 2/8 space */}
+      <Pressable
+        style={styles.buttonStyles}
+        flex={0.25}
+        onPress={async () => {
+          await onFav("interest", item, 1);
+          setSubmittedActions((prev) => ({
+            ...prev,
+            [`${item.unique_property_id}_Interest`]: true,
+          }));
+        }}
+      >
+        <Text style={styles.buttonsText}>Contact</Text>
+      </Pressable>
+    </HStack>
+      </Pressable>
+      </View>
     );
   }
 );
@@ -243,6 +244,7 @@ const formatToIndianCurrency = (value) => {
   if (value >= 1000) return (value / 1000).toFixed(2) + " K";
   return value.toString();
 };
+
 export default function PropertyLists({ route }) {
   const { prevLocation, prevSearch } = route.params || {};
   const dispatch = useDispatch();
@@ -268,6 +270,8 @@ export default function PropertyLists({ route }) {
   const cities = useSelector((state) => state.property.cities, shallowEqual);
   const [suggestions, setSuggestions] = useState([]);
   const [recentSuggestions, setRecentSuggestions] = useState([]);
+  const maxLimit = 50;
+
   const {
     isOpen: isFilterOpen,
     onOpen: onOpenFilter,
@@ -283,9 +287,11 @@ export default function PropertyLists({ route }) {
     min_price_range: 1000,
     max_price_range: 30000000,
   });
+
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedPropertyId, setSelectedPropertyId] = useState(null);
   const [type, setType] = useState("");
+
   const handleFilterChange = (key, selectedId) => {
     let selectedValue = "";
     if (key === "property_for") {
@@ -312,11 +318,14 @@ export default function PropertyLists({ route }) {
     setFilters((prev) => ({ ...prev, [key]: selectedValue }));
     setPage(1);
   };
+
+
   const applyFilters = () => {
     setPage(1);
     fetchProperties(true, filters, "Hyderabad");
     onCloseFilter();
   };
+
   const clearAllFilters = () => {
     setFilters({
       property_for: "Sell",
@@ -337,6 +346,7 @@ export default function PropertyLists({ route }) {
       max_price_range: 30000000,
     });
   };
+
   useEffect(() => {
     setPropertyForOptions([
       { id: "Buy", label: "Buy", value: "Sell" },
@@ -392,9 +402,12 @@ export default function PropertyLists({ route }) {
       },
     ]);
   }, []);
+
+
   const locationCacheRef = useRef({});
   const fetchProperties = useCallback(
     async (reset = false, appliedFilters = filters, searchedLocation) => {
+      if (!hasMore && !reset) return; // Prevent fetching if no more pages
       setPropertyLoading(true);
       try {
         const [storedDetails, cityId] = await Promise.all([
@@ -414,46 +427,62 @@ export default function PropertyLists({ route }) {
           "Hyderabad"
         ).toLowerCase();
         const pageToFetch = reset ? 1 : page;
+
+        // Check cache for the searched location
         if (
           locationCacheRef.current[locationToSearch] &&
           !reset &&
           pageToFetch === 1
         ) {
-          setProperties(locationCacheRef.current[locationToSearch]);
+          setProperties(locationCacheRef.current[locationToSearch].slice(0, maxLimit));
           setHasMore(true);
           setPropertyLoading(false);
           return;
         }
+
+        // Map filters to API query parameters
         const queryParams = new URLSearchParams({
-          searched_location: locationToSearch,
-          searched_city: prevLocation?.value || cityData?.value || "4",
-          searched_property_for: appliedFilters.property_for || "",
-          searched_property_sub: appliedFilters.property_type || "",
-          searched_occupancy: appliedFilters.possession_status || "",
-          searched_beds: appliedFilters.bedrooms || "",
-          searched_min_price: appliedFilters.min_price_range || "",
-          searched_max_price: appliedFilters.max_price_range || "",
           page: pageToFetch,
-          limit: limit,
+          property_for: appliedFilters.property_for
+            ? appliedFilters.property_for === "Buy"
+              ? "Sell"
+              : appliedFilters.property_for
+            : "Sell",
+          property_in: appliedFilters.building_type || "Residential",
+          sub_type: appliedFilters.property_type || "Apartment",
+          search: locationToSearch,
+          bedrooms: appliedFilters.bedrooms
+            ? appliedFilters.bedrooms.replace(" BHK", "")
+            : "",
+          property_cost: appliedFilters.max_price_range || "",
+          priceFilter: appliedFilters.sort || "Relevance",
+          occupancy: appliedFilters.possession_status || "",
+          property_status: "1",
         }).toString();
-        const response = await fetch(
-          `https://api.meetowner.in/listings/getallpropertiesnew?${queryParams}`
-        );
+
+        const url = `https://api.meetowner.in/listings/v1/getAllPropertiesByType?${queryParams}`;
+  
+
+        const response = await fetch(url);
         const data = await response.json();
-        if (data?.propertiesData?.length > 0) {
-          setProperties((prev) =>
-            reset ? data.propertiesData : [...prev, ...data.propertiesData]
-          );
-          setPage(reset ? 2 : page + 1);
-          setHasMore(true);
+
+
+        if (data?.properties?.length > 0) {
+          setProperties((prev) => {
+            const combined = reset ? data.properties : [...prev, ...data.properties];
+            return combined.slice(0, maxLimit); // Limit to maxLimit
+          });
+          setPage(pageToFetch + 1); // Increment page for next fetch
+          setHasMore(data.current_page < data.total_pages && properties.length < maxLimit); // Check if more pages and under limit
           if (reset || pageToFetch === 1) {
-            locationCacheRef.current[locationToSearch] = data.propertiesData;
+            locationCacheRef.current[locationToSearch] = data.properties;
           }
         } else {
           if (reset) setProperties([]);
           setHasMore(false);
         }
       } catch (error) {
+        console.error("Error fetching properties:", error);
         if (reset) setProperties([]);
         setHasMore(false);
       } finally {
@@ -461,12 +490,17 @@ export default function PropertyLists({ route }) {
         if (reset) setRefreshing(false);
       }
     },
-    [filters, page, limit, prevSearch, prevLocation]
+    [filters, page, prevSearch, prevLocation, hasMore, properties.length]
   );
+
+
+
   const MAX_CACHE_SIZE = 5;
   useEffect(() => {
     loadRecentSuggestions();
   }, []);
+
+
   const loadRecentSuggestions = async () => {
     try {
       const cachedSuggestions = await AsyncStorage.getItem("recentSuggestions");
@@ -475,6 +509,8 @@ export default function PropertyLists({ route }) {
       }
     } catch (error) {}
   };
+
+
   const saveToCache = async (newSuggestion) => {
     try {
       let updatedSuggestions = [newSuggestion, ...recentSuggestions];
@@ -488,6 +524,7 @@ export default function PropertyLists({ route }) {
       setRecentSuggestions(updatedSuggestions);
     } catch (error) {}
   };
+
   const fetchSuggestions = async (city_id, query) => {
     if (query.length < 3) {
       return false;
@@ -513,6 +550,8 @@ export default function PropertyLists({ route }) {
       setLoading(false);
     }
   };
+
+
   useEffect(() => {
     const fetchCities = async () => {
       try {
@@ -541,6 +580,7 @@ export default function PropertyLists({ route }) {
     getUserLocation();
   }, [dispatch, userLocation]);
   const [userLocation, setUserLocation] = useState("");
+
   const getUserLocation = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -576,6 +616,7 @@ export default function PropertyLists({ route }) {
       dispatch(setUserLocation("Unknown City"));
     }
   };
+
   useEffect(() => {
     setLocations(cities);
     setFilteredLocations(cities);
@@ -593,6 +634,8 @@ export default function PropertyLists({ route }) {
       }
     }
   }, [cities, userLocation]);
+
+
   useEffect(() => {
     setSearchQuery(prevSearch || "");
     if (prevLocation) {
@@ -635,6 +678,7 @@ export default function PropertyLists({ route }) {
       });
     }
   };
+
   React.useEffect(() => {
     const backAction = () => {
       if (navigation.canGoBack()) {
@@ -653,6 +697,7 @@ export default function PropertyLists({ route }) {
     );
     return () => backHandler.remove();
   }, []);
+
   const handleMetrics = async (property, type) => {
     await axios.post("https://api.meetowner.in/metrics/saveAnalytics", {
       user_id: userDetails?.user_id || "",
@@ -666,7 +711,9 @@ export default function PropertyLists({ route }) {
       created_at: "",
     });
   };
+
   const [owner, setOwner] = useState("");
+
   const getOwnerDetails = async () => {
     const response = await fetch(
       `https://api.meetowner.in/listings/getsingleproperty?unique_property_id=${selectedPropertyId?.unique_property_id}`
@@ -678,6 +725,8 @@ export default function PropertyLists({ route }) {
       setOwner(sellerdata);
     }
   };
+
+
   const handleAPI = async () => {
     await getOwnerDetails();
     const payload = {
@@ -722,6 +771,7 @@ export default function PropertyLists({ route }) {
       });
     } catch (error) {}
   };
+
   const handleIntrests = async (type, property, userDetails) => {
     await handleMetrics(property, userDetails, type);
   };
@@ -732,6 +782,7 @@ export default function PropertyLists({ route }) {
       await handleIntrests(type, item, userDetails);
     } catch (error) {}
   }, []);
+
   const handleNavigate = useCallback(
     (item) => {
       dispatch(setPropertyDetails(item));
@@ -739,11 +790,13 @@ export default function PropertyLists({ route }) {
     },
     [navigation]
   );
+
   const getItemLayout = (_, index) => ({
     length: 180,
     offset: 180 * index,
     index,
   });
+
   const renderPropertyCard = useCallback(
     ({ item }) => (
       <PropertyCard
@@ -768,6 +821,7 @@ export default function PropertyLists({ route }) {
     ),
     [handleFavourites, handleNavigate]
   );
+
   const handleScroll = (event) => {
     const offsetY = event.nativeEvent.contentOffset.y;
     if (offsetY > 100 && !showScrollToTop) {
@@ -776,25 +830,30 @@ export default function PropertyLists({ route }) {
       setShowScrollToTop(false);
     }
   };
+
   const scrollToTop = () => {
     if (flatListRef.current) {
       flatListRef.current.scrollToOffset({ offset: 0, animated: true });
       setShowScrollToTop(false);
     }
   };
+
   const onRefresh = () => {
     setRefreshing(true);
     setPage(1);
     fetchProperties(true);
   };
+
   const showFilterActionSheet = () => {
     onOpenFilter();
   };
+
   const loadMoreProperties = () => {
-    if (hasMore && !loading) {
-      setLimit((prevLimit) => prevLimit + 50);
+    if (hasMore && !propertyLoading && properties.length < maxLimit) {
+      fetchProperties(false, filters, searchQuery || prevSearch || "Hyderabad");
     }
   };
+
   const handleSearch = useMemo(
     () => (query) => {
       if (query === searchQuery) return;
@@ -825,60 +884,27 @@ export default function PropertyLists({ route }) {
     setSelectedLocation(item);
     onClose();
   };
+
+  const searchMoreProperties = () => {
+    setPage(1);
+    setProperties([]); 
+    fetchProperties(true, filters, searchQuery || prevSearch || "Hyderabad");
+  };
+
+
   return (
     <View style={styles.container}>
       <View style={{ width: "100%", position: "relative" }}>
-        <HStack justifyContent="space-between" p={2}>
-          <TouchableOpacity onPress={onOpen}>
-            <View flexDirection="row" gap={2}>
-              <Ionicons name="location-outline" size={20} color="red" />
-              <Text>
-                Choose properties in{" "}
-                <Text style={{ color: "blue", fontWeight: "bold" }}>
-                  {selectedLocation?.label || selectedLocation || "your City"}
-                </Text>
-              </Text>
-            </View>
-          </TouchableOpacity>
-        </HStack>
-        <View style={styles.searchContainer}>
-          <View style={{ flex: 1, position: "relative" }}>
-            <TextInput
-              placeholder="Search City, Locality, Property, Projects"
-              placeholderTextColor="#999"
-              value={searchQuery}
-              onChangeText={(text) => {
-                handleLocationSearch(text);
-              }}
-              style={styles.textInput}
-            />
-            {searchQuery.trim() !== "" && (
-              <TouchableOpacity
-                onPress={() => {
-                  handleLocationSearch("");
-                  route.params.prevSearch = "";
-                  fetchProperties(false, filters, "Hyderabad");
-                }}
-                style={styles.cancelIcon}
-              >
-                <Ionicons name="close-circle" size={22} color="gray.800" />
-              </TouchableOpacity>
-            )}
-          </View>
-          <TouchableOpacity
-            style={styles.iconButton}
-            onPress={() => {
-              if (searchQuery.trim()) {
-                const searchedLocation = searchQuery.trim();
-                fetchProperties(true, filters, searchedLocation);
-              } else {
-                fetchProperties(false, filters, "Hyderabad");
-              }
-            }}
-          >
-            <Ionicons name="search" size={26} color="gray" />
-          </TouchableOpacity>
-        </View>
+       
+      
+      <SearchBarProperty
+  searchQuery={searchQuery}
+  setSearchQuery={setSearchQuery}
+  handleLocationSearch={handleLocationSearch}
+  fetchProperties={fetchProperties}
+  filters={filters}
+ 
+/>
         {loading ? (
           <View style={styles.loaderContainer}>
             <ActivityIndicator size="small" color="#999" />
@@ -921,9 +947,7 @@ export default function PropertyLists({ route }) {
         ) : null}
       </View>
       <HStack py={2} zIndex={1} right={1} justifyContent={"space-between"}>
-        <Text ml={3} fontWeight="bold" fontSize={20} color={"#000"}>
-          Best Deals
-        </Text>
+       
         <TouchableOpacity onPress={showFilterActionSheet}>
           <View
             flexDirection={"row"}
@@ -962,6 +986,17 @@ export default function PropertyLists({ route }) {
           windowSize={10}
           removeClippedSubviews={true}
           getItemLayout={getItemLayout}
+          ListFooterComponent={
+            properties.length >= maxLimit ? (
+              <View style={styles.footerContainer}>
+                  <Text style={styles.searchMoreText}>Please Search For More Properties</Text>
+              </View>
+            ) : propertyLoading ? (
+              <View style={styles.loaderContainer}>
+                <ActivityIndicator size="small" color="#1D3A76" />
+              </View>
+            ) : null
+          }
         />
       ) : (
         <View
@@ -1175,12 +1210,92 @@ export default function PropertyLists({ route }) {
     </View>
   );
 }
+
+
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: '#f5f5f5',
     paddingHorizontal: 10,
     paddingTop: 2,
+
+  },
+  containerVstack:{
+    borderRadius:20,
+    backgroundColor: "#ffffff",
+    margin:10,
+    overflow: "hidden",
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+  },
+  propertyText:{
+     color:"#000",
+     fontFamily:'PoppinsSemiBold',
+     fontSize:14
+
+  },
+  searchMoreText:{
+    color:"#000",
+    fontFamily:'PoppinsSemiBold',
+    fontSize:14
+  },
+  username:{
+    color:"#7C7C7C",
+    fontFamily:'Poppins',
+    fontSize:10
+
+  },
+  userType:{
+    color:"#7C7C7C",
+    fontFamily:'Poppins',
+    fontSize:10
+
+  },
+  possesionText: {
+    fontSize: 14,
+    fontFamily: 'PoppinsSemiBold',
+    color: '#7C7C7C',
+    margin: 5,
+  },
+  contentContainer:{
+    paddingVertical:5,
+    paddingHorizontal:10
+  },
+  buttonStyles:{
+    backgroundColor: "#1D3A76",
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 30,
+    
+
+  },
+  whatsbuttonStyles:{
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 30,
+    borderColor:'#25D366',
+    borderWidth:1,
+
+
+  },
+  buttonsText:{
+    color: "#fff",
+    fontSize: 12,
+    marginTop:2,
+    fontFamily: 'Poppins',
+  },
+  WhatsbuttonsText:{
+    color: "#000",
+    fontSize: 12,
+    marginTop:2,
+    fontFamily: 'Poppins',
   },
   loadingContainer: {
     flex: 1,
@@ -1199,6 +1314,10 @@ const styles = StyleSheet.create({
     marginTop: 20,
     fontSize: 16,
     color: "#666",
+  },
+  footerContainer: {
+    padding: 20,
+    alignItems: "center",
   },
   headerContainer: {
     paddingBottom: 10,

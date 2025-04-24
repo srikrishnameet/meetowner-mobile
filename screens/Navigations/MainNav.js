@@ -17,6 +17,7 @@ import { Platform } from "react-native";
 import Support from "../Pages/Support";
 import SearchBox from "../Pages/components/SearchBox";
 const Stack = createNativeStackNavigator();
+
 const CustomHeader = ({ navigation, title, route, icon }) => {
   return (
     <HStack
@@ -133,12 +134,15 @@ export default function MainNav() {
     </NavigationContainer>
   );
 }
+
 const styles = StyleSheet.create({
   header: {
     paddingBottom: 10,
     paddingTop: Platform.OS === "ios" ? 50 : 20,
     paddingHorizontal: 18,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#ffffff',
+    borderBottomWidth:1,
+    borderBottomColor:'#DBDADA'
    
   },
   iconButton: {

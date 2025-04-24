@@ -1,20 +1,10 @@
-import React, {
-  useState,
-  useRef,
-  useEffect,
-  useCallback,
-  useMemo,
-} from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   StyleSheet,
-  Animated,
-  Dimensions,
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
   Alert,
-  Image,
-  BackHandler,
   Platform,
 } from "react-native";
 import {
@@ -27,86 +17,62 @@ import {
   ScrollView,
   KeyboardAvoidingView,
 } from "native-base";
-import Banner1 from "../../../assets/Banner1.jpg";
-import Banner2 from "../../../assets/Banner2.jpeg";
-import Banner3 from "../../../assets/Banner4.jpg";
-import "react-native-get-random-values";
+import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useSelector, shallowEqual, useDispatch } from "react-redux";
 import * as Location from "expo-location";
 import { debounce } from "lodash";
-import { Ionicons } from "@expo/vector-icons";
-import config from "../../../config";
+import { BackHandler } from "react-native";
 import {
   setCities,
   setDeviceLocation,
   setPropertyDetails,
 } from "../../../store/slices/propertyDetails";
+import { PropertyTypeIcon } from "./SearchBarComponents/PropertyIcon";
+import { FilterSection } from "./SearchBarComponents/FilterSection";
+import { FilterOption } from "./SearchBarComponents/FilterOption";
+import SearchBarSection from "./SearchBarComponents/SearchBarSection";
+
 export default function SearchBox() {
   const dispatch = useDispatch();
   const navigation = useNavigation();
+  const { isOpen, onOpen, onClose } = useDisclose();
+  const cities = useSelector((state) => state.property.cities, shallowEqual);
   const [locations, setLocations] = useState([]);
   const [filteredLocations, setFilteredLocations] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedLocation, setSelectedLocation] = useState(null);
-  const { isOpen, onOpen, onClose } = useDisclose();
-  const cities = useSelector((state) => state.property.cities, shallowEqual);
-  const trending = useSelector((state) => state.property.trendingProjects);
-  const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [userLocation, setUserLocation] = useState("");
-  const fetchSuggestions = async (city_id, query) => {
-    if (!query || query.length < 3 || !city_id) {
-      setSuggestions([]);
-      return;
-    }
-    setLoading(true);
-    try {
-      const response = await fetch(
-        `${config.awsApiUrl}/general/getlocalitiesbycitynamenew?city_id=${city_id}&input=${query}`
-      );
-      const data = await response.json();
-      if (data?.status === "success") {
-        setSuggestions(data?.places || []);
-      } else {
-        setSuggestions([]);
-      }
-    } catch (error) {
-    } finally {
-      setLoading(false);
-    }
-  };
-  const debouncedFetchSuggestions = useCallback(
-    debounce((city_id, query) => {
-      fetchSuggestions(city_id, query);
-    }, 300),
-    []
-  );
-  React.useEffect(() => {
-    const backAction = () => {
-      if (navigation.canGoBack()) {
-        navigation.goBack();
-      } else {
-        Alert.alert("Exit App", "Do you want to exit?", [
-          { text: "Cancel", style: "cancel" },
-          { text: "Exit", onPress: () => BackHandler.exitApp() },
-        ]);
-      }
-      return true;
-    };
-    const backHandler = BackHandler.addEventListener(
-      "hardwareBackPress",
-      backAction
+  const [selectedPropertyType, setSelectedPropertyType] = useState("Buy");
+  const [selectedBuildingType, setSelectedBuildingType] = useState("Residential");
+  const [selectedSubPropertyType, setSelectedSubPropertyType] = useState("");
+  const [selectedBedrooms, setSelectedBedrooms] = useState("");
+  const [selectedFurnishing, setSelectedFurnishing] = useState("");
+  const [selectedPostedBy, setSelectedPostedBy] = useState("");
+  const [selectedAmenities, setSelectedAmenities] = useState([]);
+  const [selectedPossession, setSelectedPossession] = useState("");
+  const inputRef = useRef(null);
+
+  // Toggle functions
+  const togglePropertyType = (type) => setSelectedPropertyType(type);
+  const toggleBuildingType = (type) => setSelectedBuildingType(type);
+  const toggleSubPropertyType = (type) => setSelectedSubPropertyType(type);
+  const toggleBedroom = (type) => setSelectedBedrooms(type);
+  const toggleFurnishing = (type) => setSelectedFurnishing(type);
+  const togglePostedBy = (type) => setSelectedPostedBy(type);
+  const toggleAmenity = (type) =>
+    setSelectedAmenities((prev) =>
+      prev.includes(type) ? prev.filter((item) => item !== type) : [...prev, type]
     );
-    return () => backHandler.remove();
-  }, []);
+  const togglePossession = (type) => setSelectedPossession(type);
+
+  // Fetch cities
   useEffect(() => {
     const fetchCities = async () => {
       try {
         if (cities.length === 0) {
-          const response = await fetch(
-            "https://api.meetowner.in/general/getcities"
-          );
+          const response = await fetch("https://api.meetowner.in/general/getcities");
           const data = await response.json();
           dispatch(setCities(data.cities || []));
         }
@@ -114,8 +80,9 @@ export default function SearchBox() {
     };
     fetchCities();
     getUserLocation();
-    fetchProperties();
   }, [dispatch, cities.length]);
+
+  // Get user location
   const getUserLocation = async () => {
     setLoading(true);
     try {
@@ -129,21 +96,20 @@ export default function SearchBox() {
         accuracy: Location.Accuracy.Highest,
       });
       const { latitude, longitude } = location.coords;
-      const geocode = await Location.reverseGeocodeAsync({
-        latitude,
-        longitude,
-      });
+      const geocode = await Location.reverseGeocodeAsync({ latitude, longitude });
       if (geocode.length > 0) {
         const city = geocode[0]?.city || "Unknown City";
         setUserLocation(city);
         dispatch(setDeviceLocation(city));
-        setLoading(false);
       }
     } catch (error) {
-      setLoading(false);
       dispatch(setDeviceLocation("Unknown City"));
+    } finally {
+      setLoading(false);
     }
   };
+
+  // Update locations and set default city
   useEffect(() => {
     setLocations(cities);
     setFilteredLocations(cities);
@@ -152,430 +118,329 @@ export default function SearchBox() {
         (city) => city.label.toLowerCase() === userLocation.toLowerCase()
       );
       if (matchedCity) {
-        setSelectedLocation({
-          label: matchedCity.label,
-          value: matchedCity.value,
-        });
+        setSelectedLocation({ label: matchedCity.label, value: matchedCity.value });
       } else {
         setSelectedLocation(null);
       }
     }
   }, [cities, userLocation]);
-  const handleSearch = useMemo(
-    () => (query) => {
-      if (query === searchQuery) return;
-      setSearchQuery(query);
-      setFilteredLocations(
-        query === ""
-          ? locations
-          : locations.filter((loc) =>
-              loc.label.toLowerCase().includes(query.toLowerCase())
-            )
-      );
-    },
-    [searchQuery]
-  );
-  const handleLocationSearch = (text) => {
-    const trimmedText = text.trim();
-    setSearchQuery(trimmedText);
-    if (trimmedText === "" || trimmedText.length < 3) {
-      setSuggestions([]);
-      return;
-    }
-    debouncedFetchSuggestions(selectedLocation?.value, trimmedText);
+
+  // Handle city search
+  const handleCitySearch = (query) => {
+    setSearchQuery(query);
+    setFilteredLocations(
+      query === ""
+        ? locations
+        : locations.filter((loc) => loc.label.toLowerCase().includes(query.toLowerCase()))
+    );
   };
+
+  // Handle city selection
   const handleCitySelect = (item) => {
     setSelectedLocation(item);
     onClose();
+    setSearchQuery(""); // Clear search query after selection
   };
-  const renderItem = useCallback(
-    ({ item }) => (
-      <TouchableOpacity
-        onPress={() => handleCitySelect(item)}
-        style={styles.fullWidthItem}
-      >
-        <Text style={styles.fullWidthText}>{item.label}</Text>
-      </TouchableOpacity>
-    ),
-    [handleCitySelect]
+
+  // Render city item
+  const renderItem = ({ item }) => (
+    <TouchableOpacity onPress={() => handleCitySelect(item)} style={styles.fullWidthItem}>
+      <Text style={styles.fullWidthText}>{item.label}</Text>
+    </TouchableOpacity>
   );
 
+  // Back button handler
+  useEffect(() => {
+    const backAction = () => {
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      } else {
+        Alert.alert("Exit App", "Do you want to exit?", [
+          { text: "Cancel", style: "cancel" },
+          { text: "Exit", onPress: () => BackHandler.exitApp() },
+        ]);
+      }
+      return true;
+    };
+    const backHandler = BackHandler.addEventListener("hardwareBackPress", backAction);
+    return () => backHandler.remove();
+  }, [navigation]);
+
+
+ 
   const handlePropertiesLists = () => {
+    console.log(searchQuery);
+    console.log(selectedLocation);
     navigation.navigate("PropertyList", {
       prevSearch: searchQuery,
       prevLocation: selectedLocation,
     });
   };
-  const ImagesData = [
-    {
-      id: 1,
-      image: Banner3,
-      color: "#D3D3D3",
-    },
-    {
-      id: 2,
-      image: Banner2,
-      color: "#E0E0E0",
-    },
-    {
-      id: 3,
-      image: Banner1,
-      color: "#E0E0E0",
-    },
-  ];
-  const flatListRef = useRef(null);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  useEffect(() => {
-    if (flatListRef.current && trends.length > 0) {
-      const interval = setInterval(() => {
-        const nextIndex = (currentIndex + 1) % trends.length;
-        flatListRef.current?.scrollToIndex({
-          index: nextIndex,
-          animated: true,
-        });
-        setCurrentIndex(nextIndex);
-      }, 3000);
-      return () => clearInterval(interval);
-    }
-  }, [currentIndex, trends?.length]);
-  const onScrollEnd = (event) => {
-    const contentOffsetX = event.nativeEvent.contentOffset.x;
-    const index = Math.floor(contentOffsetX / Dimensions.get("window").width);
-  };
-  const handleFetchLiveLocation = async () => {
-    setLoading(true);
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert(
-          "Permission Denied",
-          "Location access is required to fetch your current location."
-        );
-        return;
-      }
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Highest,
-        enableHighAccuracy: true,
-        maximumAge: 0,
-        timeout: 10000,
-      });
-      const { latitude, longitude } = location.coords;
-      const geocode = await Location.reverseGeocodeAsync({
-        latitude,
-        longitude,
-      });
-      if (geocode.length > 0) {
-        const place = geocode[0];
-        const city = place?.formattedAddress || "";
-        const modifiedCity = city.split(",").slice(1, 4).join(", ").trim();
-        setSearchQuery(modifiedCity);
-        setLoading(false);
-      }
-    } catch (error) {
-      setLoading(false);
-    }
-  };
-  const [trends, setTrends] = useState([]);
-  const fetchProperties = async (reset = false) => {
-    const response = await fetch(
-      `https://api.meetowner.in/listings/getlatestproperties?limit=5&type_of_property=Sell&city_id=4`
-    );
-    const data = await response.json();
-    if (data.propertiesData && data.propertiesData.length > 0) {
-      setTrends(data.propertiesData.slice(0, 4));
-    }
-  };
-  const handleNavigate = useCallback(
-    (item) => {
-      dispatch(setPropertyDetails(item));
-      navigation.navigate("PropertyDetails");
-    },
-    [navigation]
-  );
+
   return (
     <View style={styles.container}>
       <ScrollView
-        contentContainerStyle={{
-          flexGrow: 1,
-          paddingBottom: 70,
-        }}
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.currentLocation}>
-          <TouchableOpacity
-            onPress={handleFetchLiveLocation}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              backgroundColor: "#f0f0f0",
-              borderRadius: 20,
-              padding: 5,
-            }}
-          >
-            <Ionicons name="locate" size={18} color="red" />
-            <Text style={{ marginLeft: 5, color: "#333", fontSize: 14 }}>
-              Use Current Location
-            </Text>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.searchContainer}>
+        {/* City Selection */}
+        <View style={styles.shadowSection}>
+        <View style={styles.locationSection}>
+          <Text style={styles.locationLabel}>You are searching in</Text>
           <TouchableOpacity style={styles.cityButton} onPress={onOpen}>
             <HStack space={1} alignItems="center">
-              <Ionicons name="location-outline" size={20} color="orange" />
               <Text style={styles.cityText}>
-                {selectedLocation?.label || selectedLocation || "Select City"}
+                {selectedLocation?.label || "Select City"}
               </Text>
               <Ionicons name="chevron-down" size={20} color="gray" />
             </HStack>
           </TouchableOpacity>
-          <View style={{ flex: 1, position: "relative" }}>
-            <TextInput
-              placeholder="Search city, locality, properties"
-              placeholderTextColor="#999"
-              value={searchQuery}
-              onChangeText={(text) => {
-                handleLocationSearch(text);
-              }}
-              selectTextOnFocus={false}
-              style={styles.textInput}
+        </View>
+
+        {/* Property Type Icons */}
+        <View style={styles.propertyTypeIconsContainer}>
+          <PropertyTypeIcon
+            type="Buy"
+            icon="home"
+            selected={selectedPropertyType === "Buy"}
+            onPress={() => togglePropertyType("Buy")}
+          />
+          <PropertyTypeIcon
+            type="Rent"
+            icon="key"
+            selected={selectedPropertyType === "Rent"}
+            onPress={() => togglePropertyType("Rent")}
+          />
+          <PropertyTypeIcon
+            type="Plot"
+            icon="map"
+            selected={selectedPropertyType === "Plot"}
+            onPress={() => togglePropertyType("Plot")}
+          />
+          <PropertyTypeIcon
+            type="Commercial"
+            icon="building"
+            selected={selectedPropertyType === "Commercial"}
+            onPress={() => togglePropertyType("Commercial")}
+          />
+        </View>
+        </View>
+        {/* Search Bar Section */}
+        <SearchBarSection
+          selectedCity={selectedLocation}
+          setSearchQuery={setSearchQuery}
+        />
+
+        {/* Filter Sections */}
+        <FilterSection title="Building Type">
+          <View style={styles.filterOptionsRow}>
+            <FilterOption
+              label="Residential"
+              selected={selectedBuildingType === "Residential"}
+              onPress={() => toggleBuildingType("Residential")}
+              checkmark={true}
             />
-            {searchQuery.trim() !== "" && (
-              <TouchableOpacity
-                onPress={() => {
-                  handleLocationSearch("");
-                }}
-                style={styles.cancelIcon}
-              >
-                <Ionicons name="close-circle" size={22} color="gray.400" />
-              </TouchableOpacity>
-            )}
+            <FilterOption
+              label="Commercial"
+              selected={selectedBuildingType === "Commercial"}
+              onPress={() => toggleBuildingType("Commercial")}
+              checkmark={true}
+            />
           </View>
-          <TouchableOpacity
-            style={styles.iconButton}
-            onPress={handlePropertiesLists}
-          >
-            <Ionicons name="search" size={26} color="gray" />
-          </TouchableOpacity>
-        </View>
-        <View style={styles.suggestionsContainer}>
-          {loading ? (
-            <View style={styles.loaderContainer}>
-              <ActivityIndicator size="small" color="#999" />
-            </View>
-          ) : suggestions.length > 0 ? (
-            <View style={[styles.suggestionsList]}>
-              <TouchableOpacity
-                onPress={() => {
-                  setSuggestions([]);
-                }}
-                style={styles.closeButton}
-              >
-                <Ionicons name="close-circle" size={22} color="#000" />
-              </TouchableOpacity>
-              <FlatList
-                data={suggestions}
-                keyExtractor={(item, index) => index.toString()}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.suggestionItem}
-                    onPress={() => {
-                      setSearchQuery(item?.value || item?.label);
-                      setSuggestions([]);
-                    }}
-                  >
-                    <Text style={styles.suggestionText}>{item?.label}</Text>
-                  </TouchableOpacity>
-                )}
-                nestedScrollEnabled={true}
-                style={styles.suggestionsList}
-              />
-            </View>
-          ) : null}
-        </View>
-        <View>
-          <FlatList
-            ref={flatListRef}
-            data={ImagesData}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onMomentumScrollEnd={onScrollEnd}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={[
-                  styles.adItem1,
-                  { backgroundColor: item.color || "#D3D3D3" },
-                ]}
-              >
-                <Image
-                  source={
-                    typeof item.image === "string"
-                      ? { uri: item.image }
-                      : item.image
-                  }
-                  resizeMode="stretch"
-                  style={{
-                    flex: 1,
-                    width: "100%",
-                    height: "100%",
-                    borderRadius: 20,
-                  }}
-                />
-              </TouchableOpacity>
-            )}
-            keyExtractor={(item) => item.id.toString()}
-            nestedScrollEnabled={true}
-          />
-        </View>
-        <View>
-          <FlatList
-            style={{ padding: 10 }}
-            ref={flatListRef}
-            data={[
-              {
-                id: "1",
-                title: "Comprehensive Property Listings",
-                description:
-                  "Explore a wide range of properties tailored to your needs.",
-              },
-              {
-                id: "2",
-                title: "Location-Based Search",
-                description: "Find properties in your desired area with ease.",
-              },
-              {
-                id: "3",
-                title: "Location-Based Properties",
-                description: "Find properties in your desired area with ease.",
-              },
-            ]}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{
-              paddingRight: 140,
-            }}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={{
-                  backgroundColor: "#fff",
-                  borderRadius: 20,
-                  marginRight: 15,
-                  borderWidth: 1,
-                  borderColor: "#e0e0e0",
-                  padding: 15,
-                  width: 280,
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.1,
-                  shadowRadius: 8,
-                  elevation: 5,
-                }}
-                onPress={handlePropertiesLists}
-              >
-                <Text
-                  style={{
-                    color: "#1e3a8a",
-                    fontSize: 18,
-                    fontWeight: "600",
-                    marginBottom: 8,
-                  }}
-                >
-                  {item.title}
-                </Text>
-                <Text
-                  style={{
-                    color: "#4b5563",
-                    fontSize: 14,
-                    lineHeight: 20,
-                    marginBottom: 12,
-                  }}
-                >
-                  {item.description}
-                </Text>
-                <Ionicons
-                  name="arrow-forward"
-                  size={20}
-                  color="#7c3aed"
-                  style={{
-                    alignSelf: "flex-end",
-                    padding: 5,
-                    backgroundColor: "rgba(124, 58, 237, 0.1)",
-                    borderRadius: 50,
-                  }}
-                />
-              </TouchableOpacity>
-            )}
-            keyExtractor={(item) => item.id.toString()}
-            nestedScrollEnabled={true}
-          />
-        </View>
-        <View style={styles.Tsection}>
-          <Text fontSize="md" fontWeight="bold" mb={2}>
-            Trending Projects
-          </Text>
-          <FlatList
-            ref={flatListRef}
-            data={trends}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onMomentumScrollEnd={onScrollEnd}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={[styles.adItem, { backgroundColor: item.color }]}
-                onPress={() => handleNavigate(item)}
-              >
-                <View
-                  style={{ flex: 1, flexDirection: "row", overflow: "hidden" }}
-                >
-                  <Image
-                    source={{
-                      uri: `https://meetowner.in/uploads/${item?.image}`,
-                    }}
-                    style={styles.image}
-                    resizeMode="cover"
-                  />
-                  <View>
-                    <Text style={styles.adTitle}>
-                      <Text style={{ fontWeight: "bold" }}>
-                        {item?.property_name}
-                      </Text>
-                    </Text>
-                    <Text style={styles.adDescription}>
-                      <Text style={{ fontWeight: "bold" }}>Address: </Text>
-                      {item?.google_address}
-                    </Text>
-                    <Text style={styles.adDescription}>
-                      <Text style={{ fontWeight: "bold" }}>Property In: </Text>
-                      {item?.property_in} Property
-                    </Text>
-                    <Text style={styles.adDescription}>
-                      <Text style={{ fontWeight: "bold" }}>
-                        Property SubType:{" "}
-                      </Text>
-                      {item?.property_subtype}
-                    </Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            )}
-            keyExtractor={(item) => item.id.toString()}
-            nestedScrollEnabled={true}
-          />
-        </View>
+        </FilterSection>
+        <FilterSection title="Property Type">
+          <View style={styles.filterOptionsGrid}>
+            <FilterOption
+              label="Plot"
+              selected={selectedSubPropertyType === "Plot"}
+              onPress={() => toggleSubPropertyType("Plot")}
+            />
+            <FilterOption
+              label="Apartment"
+              selected={selectedSubPropertyType === "Apartment"}
+              onPress={() => toggleSubPropertyType("Apartment")}
+            />
+            <FilterOption
+              label="Villa"
+              selected={selectedSubPropertyType === "Villa"}
+              onPress={() => toggleSubPropertyType("Villa")}
+            />
+            <FilterOption
+              label="Independent House"
+              selected={selectedSubPropertyType === "Independent House"}
+              onPress={() => toggleSubPropertyType("Independent House")}
+            />
+            <FilterOption
+              label="Builder Floor"
+              selected={selectedSubPropertyType === "Builder Floor"}
+              onPress={() => toggleSubPropertyType("Builder Floor")}
+            />
+            <FilterOption
+              label="Penthouse"
+              selected={selectedSubPropertyType === "Penthouse"}
+              onPress={() => toggleSubPropertyType("Penthouse")}
+            />
+          </View>
+        </FilterSection>
+        <FilterSection title="Bedrooms">
+          <View style={styles.filterOptionsRow}>
+            <FilterOption
+              label="1 BHK"
+              selected={selectedBedrooms === "1 BHK"}
+              onPress={() => toggleBedroom("1 BHK")}
+            />
+            <FilterOption
+              label="1 RK"
+              selected={selectedBedrooms === "1 RK"}
+              onPress={() => toggleBedroom("1 RK")}
+            />
+            <FilterOption
+              label="2 BHK"
+              selected={selectedBedrooms === "2 BHK"}
+              onPress={() => toggleBedroom("2 BHK")}
+            />
+            <FilterOption
+              label="3 BHK"
+              selected={selectedBedrooms === "3 BHK"}
+              onPress={() => toggleBedroom("3 BHK")}
+            />
+          </View>
+          <View style={styles.filterOptionsRow}>
+            <FilterOption
+              label="4 BHK"
+              selected={selectedBedrooms === "4 BHK"}
+              onPress={() => toggleBedroom("4 BHK")}
+            />
+            <FilterOption
+              label="5 BHK"
+              selected={selectedBedrooms === "5 BHK"}
+              onPress={() => toggleBedroom("5 BHK")}
+            />
+            <FilterOption
+              label="6 BHK"
+              selected={selectedBedrooms === "6 BHK"}
+              onPress={() => toggleBedroom("6 BHK")}
+            />
+            <FilterOption
+              label="Studio"
+              selected={selectedBedrooms === "Studio"}
+              onPress={() => toggleBedroom("Studio")}
+            />
+          </View>
+        </FilterSection>
+        <FilterSection title="Furnishing Status">
+          <View style={styles.filterOptionsRow}>
+            <FilterOption
+              label="Furnished"
+              selected={selectedFurnishing === "Furnished"}
+              onPress={() => toggleFurnishing("Furnished")}
+            />
+            <FilterOption
+              label="Semi-Furnished"
+              selected={selectedFurnishing === "Semi-Furnished"}
+              onPress={() => toggleFurnishing("Semi-Furnished")}
+            />
+          </View>
+          <View style={styles.filterOptionsRow}>
+            <FilterOption
+              label="Unfurnished"
+              selected={selectedFurnishing === "Unfurnished"}
+              onPress={() => toggleFurnishing("Unfurnished")}
+            />
+            <FilterOption
+              label="Gated"
+              selected={selectedFurnishing === "Gated"}
+              onPress={() => toggleFurnishing("Gated")}
+            />
+          </View>
+        </FilterSection>
+        <FilterSection title="Posted By">
+          <View style={styles.filterOptionsRow}>
+            <FilterOption
+              label="Owner"
+              selected={selectedPostedBy === "Owner"}
+              onPress={() => togglePostedBy("Owner")}
+            />
+            <FilterOption
+              label="Partner Agents"
+              selected={selectedPostedBy === "Partner Agents"}
+              onPress={() => togglePostedBy("Partner Agents")}
+            />
+          </View>
+        </FilterSection>
+        <FilterSection title="Amenities">
+          <View style={styles.filterOptionsRow}>
+            <FilterOption
+              label="24*7 Security"
+              selected={selectedAmenities.includes("24*7 Security")}
+              onPress={() => toggleAmenity("24*7 Security")}
+            />
+            <FilterOption
+              label="Central AC"
+              selected={selectedAmenities.includes("Central AC")}
+              onPress={() => toggleAmenity("Central AC")}
+            />
+          </View>
+          <View style={styles.filterOptionsRow}>
+            <FilterOption
+              label="Visitor's Parking"
+              selected={selectedAmenities.includes("Visitor's Parking")}
+              onPress={() => toggleAmenity("Visitor's Parking")}
+            />
+            <FilterOption
+              label="Club House"
+              selected={selectedAmenities.includes("Club House")}
+              onPress={() => toggleAmenity("Club House")}
+            />
+          </View>
+          <View style={styles.filterOptionsRow}>
+            <FilterOption
+              label="Swimming Pool"
+              selected={selectedAmenities.includes("Swimming Pool")}
+              onPress={() => toggleAmenity("Swimming Pool")}
+            />
+            <FilterOption
+              label="Power Backup"
+              selected={selectedAmenities.includes("Power Backup")}
+              onPress={() => toggleAmenity("Power Backup")}
+            />
+          </View>
+          <View style={styles.filterOptionsRow}>
+            <FilterOption
+              label="Waiting/ Reception Room"
+              selected={selectedAmenities.includes("Waiting/ Reception Room")}
+              onPress={() => toggleAmenity("Waiting/ Reception Room")}
+            />
+          </View>
+        </FilterSection>
+        <FilterSection title="Possession Status">
+          <View style={styles.filterOptionsRow}>
+            <FilterOption
+              label="Ready to Move"
+              selected={selectedPossession === "Ready to Move"}
+              onPress={() => togglePossession("Ready to Move")}
+            />
+            <FilterOption
+              label="Under Construction"
+              selected={selectedPossession === "Under Construction"}
+              onPress={() => togglePossession("Under Construction")}
+            />
+          </View>
+        </FilterSection>
+        <View style={styles.bottomSpacing} />
       </ScrollView>
-      <TouchableOpacity
-        style={styles.fixedExploreButton}
-        onPress={handlePropertiesLists}
-      >
+
+    
+      <TouchableOpacity style={styles.fixedExploreButton} onPress={handlePropertiesLists}>
         <HStack alignItems="center" justifyContent="center" py={4}>
-          <Ionicons name="compass-outline" size={20} color="purple.600" />
+          <Ionicons name="compass-outline" size={20} color="purple" />
           <Text color="#1D3A76" ml={2}>
             <Text fontWeight="bold">View all properties</Text>
           </Text>
         </HStack>
       </TouchableOpacity>
+
+      {/* City Selection Actionsheet */}
       <Actionsheet isOpen={isOpen} onClose={onClose}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -591,25 +456,20 @@ export default function SearchBox() {
               placeholder="Search city"
               placeholderTextColor="#999"
               value={searchQuery}
-              onChangeText={handleSearch}
+              onChangeText={handleCitySearch}
               style={styles.actionsheetInput}
+              ref={inputRef}
             />
             <FlatList
               data={filteredLocations}
               keyExtractor={(item, index) => `${item.label}-${index}`}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  onPress={() => handleCitySelect(item)}
-                  style={styles.fullWidthItem}
-                >
-                  <Text style={styles.fullWidthText}>{item.label}</Text>
-                </TouchableOpacity>
-              )}
+              renderItem={renderItem}
               ListEmptyComponent={
                 <Text style={{ textAlign: "center", color: "gray" }}>
                   No locations found
                 </Text>
               }
+              keyboardShouldPersistTaps="always"
               contentContainerStyle={{ width: "100%" }}
               style={{ width: "100%" }}
               nestedScrollEnabled={true}
@@ -620,96 +480,60 @@ export default function SearchBox() {
     </View>
   );
 }
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
-    padding: 8,
+    backgroundColor: "#FFFFFF",
   },
-  container: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  image: {
-    width: 100,
-    height: 100,
-    borderRadius: 8,
-    marginRight: 10,
-  },
-  suggestionsContainer: {
-    position: "relative",
-    top: 2,
-    justifyContent: "center",
-    alignItems: "center",
-    flex: 0.3,
-    width: "90%",
-    alignSelf: "center",
-    zIndex: 1,
-  },
-  searchContainer: {
-    width: "100%",
-    borderWidth: 0.5,
-    borderRadius: 30,
-    marginBottom: 2,
-    borderColor: "#ddd",
-    backgroundColor: "white",
-    flexDirection: "row",
-    alignItems: "center",
-    elevation: 5,
-    shadowColor: "#000",
+  shadowSection: {
+    marginVertical: 20,
+    marginHorizontal: 15,
+    borderColor: "#E0E0E0",
+    borderWidth: 0.5, 
+    borderRadius: 20,
+    backgroundColor: "#FFFFFF", 
+    shadowColor: "#000000",
     shadowOffset: {
-      width: 0,
-      height: 2,
+      width: 0, 
+      height: 2, 
     },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
+    shadowOpacity: 0.06,
+    shadowRadius: 110,
+    elevation: 0.1, 
+    overflow: "hidden", 
+  },
+  locationSection: {
+    marginTop: 16,
+    paddingHorizontal: 15,
+  },
+  locationLabel: {
+    fontSize: 12,
+    color: "#000",
+    marginBottom: 4,
+    fontFamily:'Poppins'
   },
   cityButton: {
-    paddingHorizontal: 6,
-    paddingRight: 2,
-    justifyContent: "center",
-    alignItems: "center",
-    height: 60,
-    borderTopLeftRadius: 30,
-    borderBottomLeftRadius: 30,
-    backgroundColor: "#f9f9f9",
+    paddingHorizontal: 10,
+    paddingBottom: 8,
   },
   cityText: {
-    fontSize: 12,
-    color: "#333",
+    fontSize: 16,
+    color: "#000",
+    fontFamily: 'PoppinsSemiBold',
   },
-  textInput: {
-    height: 60,
-    fontSize: 14,
-    color: "#333",
-    flex: 1,
-    backgroundColor: "white",
-    paddingHorizontal: 10,
-    borderRadius: 30,
-  },
-  iconButton: {
-    paddingHorizontal: 18,
-    justifyContent: "center",
-    alignItems: "center",
-    height: 60,
-    borderTopRightRadius: 30,
-    borderBottomRightRadius: 30,
-    backgroundColor: "#f9f9f9",
+  propertyTypeIconsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 10,
+    marginBottom: 16,
+    paddingHorizontal: 15,
   },
   currentLocation: {
     justifyContent: "flex-end",
     alignItems: "flex-end",
     margin: 5,
-  },
-  exploreOptions: {
-    justifyContent: "center",
-    alignItems: "center",
-    marginVertical: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderRadius: 30,
-    marginTop: 10,
+    paddingHorizontal: 15,
   },
   fixedExploreButton: {
     position: "absolute",
@@ -727,9 +551,14 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     zIndex: 1000,
   },
-  Tsection: {
-    marginVertical: 10,
-    paddingHorizontal: 10,
+  filterOptionsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginBottom: 8,
+  },
+  filterOptionsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
   },
   actionsheetInput: {
     width: "100%",
@@ -739,12 +568,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     fontSize: 16,
     marginVertical: 8,
-  },
-  cancelIcon: {
-    position: "absolute",
-    right: 3,
-    top: "50%",
-    transform: [{ translateY: -10 }],
   },
   fullWidthItem: {
     flex: 1,
@@ -758,75 +581,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#333",
   },
-  adItem: {
-    width: Dimensions.get("window").width - 60,
-    height: 130,
-    padding: 10,
-    marginBottom: 15,
-    borderRadius: 20,
-    borderWidth: 0.5,
-    marginLeft: 10,
-  },
-  detailsContainer: {
-    flex: 1,
-    justifyContent: "center",
-  },
-  adTitle: {
-    fontSize: 14,
-    marginBottom: 5,
-  },
-  adDescription: {
-    fontSize: 12,
-    marginBottom: 5,
-  },
-  icon: {
-    marginTop: 5,
-  },
-  adItem1: {
-    width: Dimensions.get("window").width - 60,
-    height: 150,
-    margin: 10,
-    borderRadius: 20,
-    marginLeft: 10,
-  },
-  suggestionsList: {
-    position: "absolute",
-    top: 1,
-    left: 0,
-    right: 0,
-    backgroundColor: "white",
-    maxHeight: 200,
-    width: "100%",
-    borderRadius: 8,
-    elevation: 5,
-    zIndex: 999,
-  },
-  closeButton: {
-    position: "absolute",
-    top: 3,
-    right: 5,
-    zIndex: 1000,
-    padding: 2,
-    borderRadius: 15,
-    elevation: 3,
-  },
-  closeIcon: {
-    fontSize: 18,
-    color: "#000",
-  },
-  loaderContainer: {
-    paddingVertical: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  suggestionItem: {
-    paddingVertical: 6,
-    paddingHorizontal: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: "#ddd",
-  },
-  suggestionText: {
-    fontSize: 16,
-    color: "#333",
+  bottomSpacing: {
+    height: 100,
   },
 });
