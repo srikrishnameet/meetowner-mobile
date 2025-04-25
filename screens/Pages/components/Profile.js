@@ -339,6 +339,7 @@ export default function Profile() {
               source={{
                 uri: `https://meetowner.in/uploads/${data?.photo}`,
               }}
+              alt="profileImage"
               style={styles.profileImage}
             />
             <TouchableOpacity

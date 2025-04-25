@@ -65,7 +65,7 @@ const PropertyCard = memo(
               onPress={() => onPress && onPress(item)}
           >
         <View style={styles.imageContainer}>
-          <Image source={{ uri: property.image }} style={styles.image} />
+          <Image source={{ uri: property.image }} style={styles.image}  alt="propertyImage"/>
             <View style={styles.propertyNameOverlay}>
               <Text style={styles.propertyNameText}>{property.title}</Text>
               <Text style={styles.propertyPriceOverlay}>₹ {property.price}</Text>
@@ -89,7 +89,7 @@ const PropertyCard = memo(
               <View style={styles.featureItem}>
                 <View style={styles.highlightedDirectionIcon}>
                 <Image
-                  source={direction}
+                  source={direction} alt="direction"
                   style={{ width: 12, height: 12, tintColor: '#fff' }}
                 />
                 </View>
@@ -97,7 +97,7 @@ const PropertyCard = memo(
               </View>
               
               <View style={styles.featureItem}>
-              <Image
+              <Image alt="bhk"
                   source={bhk}
                   style={{ width: 12, height: 12, tintColor: '#fff' }}
                 />
@@ -107,7 +107,7 @@ const PropertyCard = memo(
               </View>
               
               <View style={styles.featureItem}>
-              <Image
+              <Image alt="shower"
                   source={shower}
                   style={{ width: 12, height: 12, tintColor: '#fff' }}
                 />
@@ -117,7 +117,7 @@ const PropertyCard = memo(
               </View>
               
               <View style={styles.featureItem}>
-              <Image
+              <Image alt="parking"
                   source={parking}
                   style={{ width: 12, height: 12, tintColor: '#fff' }}
                 />

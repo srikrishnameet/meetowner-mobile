@@ -39,6 +39,7 @@ import location from '../../../assets/propertyicons/location.png';
 import parking from '../../../assets/propertyicons/parking.png';
 import shower from '../../../assets/propertyicons/shower.png';
 import yards from '../../../assets/propertyicons/yards.png';
+import ContactActionSheet from "../components/propertyDetailsComponents/ContactActionSheet.js";
 
 const PropertyCard = memo(
   ({ item, onPress, onFav, onShare, intrestedProperties, enquireNow, isHighlighted = false }) => {
@@ -75,7 +76,7 @@ const PropertyCard = memo(
               onPress={() => onPress && onPress(item)}
             >
         <View style={styles.imageContainer}>
-          <Image source={{ uri: property.image }} style={styles.image} />
+          <Image source={{ uri: property.image }} style={styles.image} alt="propertyImage" />
           
           {property.forSale && (
             <View style={styles.saleTag}>
@@ -100,7 +101,7 @@ const PropertyCard = memo(
             <Text style={styles.title} numberOfLines={1}>{property.title}</Text>
             
             <View style={styles.locationContainer}>
-              <Image source={location}
+              <Image source={location} alt="location"
                       style={{ width: 12, height: 12,}} />
               <Text style={styles.locationText} numberOfLines={1}>{property.location}</Text>
             </View>
@@ -110,14 +111,14 @@ const PropertyCard = memo(
               
               <View style={styles.featureItem}>
                 <View style={styles.directionIcon}>
-                <Image source={direction}
+                <Image source={direction} alt="direction"
                       style={{ width: 12, height: 12,}} />
                 </View>
                 <Text style={styles.featureText}>{property.facing}</Text>
               </View>
               
               <View style={styles.featureItem}>
-              <Image source={bhk}
+              <Image source={bhk} alt="bhk"
                       style={{ width: 12, height: 12,}} />
                 <Text style={styles.featureText}>
                   {property.bedrooms !== "N/A" ? `${property.bedrooms} BHK` : "N/A"}
@@ -125,7 +126,7 @@ const PropertyCard = memo(
               </View>
               
               <View style={styles.featureItem}>
-              <Image source={shower}
+              <Image source={shower} alt="shower"
                       style={{ width: 12, height: 12,}} />
                 <Text style={styles.featureText}>
                   {property.bathrooms !== "N/A" ? `${property.bathrooms} Bath` : "N/A"}
@@ -133,7 +134,7 @@ const PropertyCard = memo(
               </View>
               
               <View style={styles.featureItem}>
-              <Image source={parking}
+              <Image source={parking} alt="parking"
                       style={{ width: 12, height: 12,}} />
                 <Text style={styles.featureText}>
                   {property.car_parking !== "N/A" ? `${property.car_parking} Parking` : "N/A"}
@@ -181,6 +182,8 @@ export default function LatestProperties({ activeTab }) {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedPropertyId, setSelectedPropertyId] = useState(null);
   const [type, setType] = useState("");
+
+  
 
   const [userInfo, setUserInfo] = useState("");
 
@@ -370,6 +373,17 @@ export default function LatestProperties({ activeTab }) {
     await fetchProperties(true);
   };
 
+
+  const handleEnquireSubmit = async (formData) => {
+    if (selectedPropertyId) {
+      console.log("Enquiry Details:", formData, "for property:", selectedPropertyId);
+      await handleIntrests("enquireNow", selectedPropertyId, userInfo, formData);
+    }
+    setModalVisible(false);
+    setSelectedPropertyId(null);
+  };
+
+
   return (
     <ScrollView
       style={{ flex: 1 }}
@@ -413,7 +427,18 @@ export default function LatestProperties({ activeTab }) {
           />
         </View>
       </View>
-      <Modal
+      <ContactActionSheet
+        isOpen={modalVisible}
+        onClose={() => {
+          setModalVisible(false);
+          setSelectedPropertyId(null);
+        }}
+        onSubmit={handleEnquireSubmit}
+        userDetails={userInfo}
+        title="Enquire Now" 
+        type="enquireNow" 
+    />
+      {/* <Modal
         transparent={true}
         animationType="slide"
         visible={modalVisible}
@@ -437,7 +462,7 @@ export default function LatestProperties({ activeTab }) {
             </TouchableWithoutFeedback>
           </View>
         </TouchableWithoutFeedback>
-      </Modal>
+      </Modal> */}
     </ScrollView>
   );
 }
@@ -445,7 +470,7 @@ export default function LatestProperties({ activeTab }) {
 const styles = StyleSheet.create({
   cardContainer: {
     width: 310,
-    height:345,
+    height:355,
     borderRadius: 20,
     backgroundColor: "#fdfdfd",
     marginRight: 15,
@@ -576,7 +601,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#1D3A76",
     paddingHorizontal: 18,
     paddingVertical: 10,
-    borderRadius: 20,
+    borderRadius: 30,
     fontFamily: 'PoppinsSemiBold',
     fontWeight: "600",
   },
@@ -584,6 +609,8 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 12,
     fontWeight: "500",
+    fontFamily:'Poppins',
+    marginTop:5
   },
   propertyNameOverlay: {
     position: "absolute",

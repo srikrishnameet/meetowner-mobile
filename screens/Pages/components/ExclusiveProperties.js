@@ -64,7 +64,7 @@ const PropertyCard = memo(
         onPress={() => onPress && onPress(item)}
       >
         <View style={styles.imageContainer}>
-          <Image source={{ uri: property.image }} style={styles.ownerImage} />
+          <Image source={{ uri: property.image }} style={styles.ownerImage}  alt="property"/>
         </View>
         <Text style={styles.ownerTitle} numberOfLines={1}>
           {property.title}

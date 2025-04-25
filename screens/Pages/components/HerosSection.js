@@ -206,7 +206,7 @@ export default function HerosSection({ setSelectedCity }) {
           onPress={handlePropertiesLists}
         >
         <Image
-        source={LocationImage}
+        source={LocationImage} alt="locationImage"
         style={{ width: 30, height: 30,  }}
       />
 

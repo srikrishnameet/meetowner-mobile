@@ -359,6 +359,7 @@ export default function PropertyDetails({ navigation }) {
                   <Image
                     source={{ uri: item }}
                     style={styles.projectPhoto}
+                    alt='projectPhoto'
                     resizeMode="cover"
                     onError={(error) => console.log('Project photo error:', error.nativeEvent)}
                   />
@@ -449,6 +450,7 @@ export default function PropertyDetails({ navigation }) {
               <Image
                 source={{ uri: floorPlan }}
                 style={styles.floorPlanImage}
+                alt='floorPlan'
                 resizeMode="cover"
                 onError={(error) => console.log('Image loading error:', error.nativeEvent)}
               />
@@ -599,6 +601,7 @@ export default function PropertyDetails({ navigation }) {
           <Image
             source={{ uri: floorPlan }}
             style={styles.fullScreenImage}
+            alt='fullScreen'
             resizeMode="contain"
             onError={(error) => console.log('Full-screen image loading error:', error.nativeEvent)}
           />

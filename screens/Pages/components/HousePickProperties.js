@@ -30,9 +30,10 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import ShareDetailsModal from "./ShareDetailsModal";
 import { Modal, TouchableWithoutFeedback } from "react-native";
+import ContactActionSheet from "./propertyDetailsComponents/ContactActionSheet";
 
 const PropertyCard = memo(
-  ({ item, onPress, }) => {
+  ({ item, onPress,onViewAll,contactNow }) => {
   
     // Map item properties to the example's property object structure
     const property = {
@@ -48,17 +49,20 @@ const PropertyCard = memo(
       car_parking: item?.car_parking || "N/A",
     };
 
+    
     return (
-       <TouchableOpacity
-            activeOpacity={1} 
-              onPress={() => onPress && onPress(item)}
-        >
+      
       <View style={styles.container}>
   
         <View style={styles.cardContainer}>
           <View style={styles.card}>
+
+          <TouchableOpacity
+            activeOpacity={1} 
+              onPress={() => onPress && onPress(item)}
+        >
             <View style={styles.imageContainer}>
-              <Image
+              <Image alt="propetyImage"
                 source={{  uri: property.image}}
                 style={styles.image}
                 resizeMode="cover"
@@ -88,19 +92,23 @@ const PropertyCard = memo(
               </Text>
             </View>
           </View>
-
+          </TouchableOpacity>
   
           <View style={styles.buttonContainer}>
               <TouchableOpacity
                 style={styles.viewAllButton}
-                onPress={() => onPress && onPress(item)}
+               
+                onPress={() => onViewAll && onViewAll()}
+               
               >
                 <Text style={styles.viewAllText}>View All Projects</Text>
               </TouchableOpacity>
             
             <TouchableOpacity
               style={styles.contactButton}
-              // onPress={() => handleContact(properties[activeIndex])}
+              onPress={()=>{
+                contactNow(item);
+              }}
             >
               <Text style={styles.contactButtonText}>Contact</Text>
             </TouchableOpacity>
@@ -109,7 +117,7 @@ const PropertyCard = memo(
           </View>
         </View>
       </View>
-      </TouchableOpacity>
+      
     );
   }
 );
@@ -127,14 +135,14 @@ export default function HousePickProperties({ activeTab }) {
   const dispatch = useDispatch();
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
- 
   const [refreshing, setRefreshing] = useState(false);
   const [showScrollToTop, setShowScrollToTop] = useState(false);
   const flatListRef = useRef(null);
   const navigation = useNavigation();
- 
-  const [modalVisible, setModalVisible] = useState(false);
+  const [userDetails, setUserDetails] = useState(null);
   const [selectedPropertyId, setSelectedPropertyId] = useState(null);
+  const [modalVisible, setModalVisible] = useState(false); 
+  const [selectedItem, setSelectedItem] = useState(null); 
   const [type, setType] = useState("");
 
   const [userInfo, setUserInfo] = useState("");
@@ -167,7 +175,7 @@ export default function HousePickProperties({ activeTab }) {
  
 
 
-  useEffect(() => {
+   useEffect(() => {
     const getData = async () => {
       const data = await AsyncStorage.getItem("userdetails");
       const parsedUserDetails = JSON.parse(data);
@@ -186,9 +194,17 @@ export default function HousePickProperties({ activeTab }) {
   }, []);
 
 
-
+  const contactNow = (item) => {
+    setSelectedItem(item); // Store the selected item
+    setSelectedPropertyId(item); // Update selectedPropertyId
+    setModalVisible(true); // Open the ContactActionSheet
+  };
   
-
+  const handleSubmit = (formData) => {
+    console.log("Submitted Details:", formData, "for item:", selectedItem); // Log form data and selected item
+    setModalVisible(false); // Close the ContactActionSheet
+    setSelectedItem(null); // Clear the selected item
+  };
   
   const handleNavigate = useCallback((item) => {
     dispatch(setPropertyDetails(item));
@@ -204,16 +220,16 @@ export default function HousePickProperties({ activeTab }) {
       if (!item || !item.unique_property_id) {
         return null;
       }
-     
       return (
         <PropertyCard
           item={item}
           onPress={() => handleNavigate(item)}
-         
+          onViewAll={() => handlePropertiesLists()}
+          contactNow = {contactNow}
         />
       );
     },
-    [ handleNavigate]
+    [ handleNavigate, handlePropertiesLists, contactNow]
   );
 
   const handleScroll = (event) => {
@@ -273,31 +289,17 @@ export default function HousePickProperties({ activeTab }) {
           />
         </View>
       </View>
-      <Modal
-        transparent={true}
-        animationType="slide"
-        visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <TouchableWithoutFeedback
-          onPress={() => {
-            setModalVisible(false);
-          }}
-        >
-          <View style={styles.modalContainer}>
-            <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
-              <View style={styles.modalContent}>
-                <ShareDetailsModal
-                  type={type}
-                  modalVisible={modalVisible}
-                  setModalVisible={setModalVisible}
-                  selectedPropertyId={selectedPropertyId}
-                />
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
+      <ContactActionSheet
+            isOpen={modalVisible}
+            onClose={() => {
+              setModalVisible(false);
+              setSelectedItem(null);
+            }}
+          onSubmit={handleSubmit}
+          userDetails={userDetails}
+          title="Contact Now"
+          type="contact"
+      />     
     </ScrollView>
   );
 }
@@ -395,7 +397,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#1D3A76",
     paddingHorizontal:40,
     paddingVertical: 10,
-    borderRadius: 23,
+    borderRadius: 30,
   },
   viewAllText: {
     color: '#1D3A76', // Change color as needed
@@ -408,6 +410,7 @@ const styles = StyleSheet.create({
   contactButtonText: {
     color: "#fff",
     fontSize: 14,
-    fontFamily: "PoppinsSemiBold",
+    fontFamily: "Poppins",
+    marginTop:4,
   },
 });

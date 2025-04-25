@@ -17,19 +17,21 @@ const UserAvatar = ({ item, size = 24 }) => {
             alt={`${item.user.name}'s Profile Picture`}
             width={12}
             height={12}
-            borderRadius={30} // Half of width/height for circular shape
-            resizeMode="cover" // Ensure image fills the circle
+            borderRadius={30} 
+            resizeMode="cover"
             />
         ) : (
         <Box
             width={12}
             height={12}
             borderRadius={30}
-            backgroundColor="#1D3A76" // Customize background color
+            backgroundColor="#FFFFFF" 
             alignItems="center"
             justifyContent="center"
+            borderColor="#000000"
+            borderWidth="0.5"
         >
-        <Text color="#fff" fontSize={size * 0.5} fontWeight="bold">
+        <Text color="#000" fontSize={size * 0.5} fontWeight="bold">
              {firstLetter}
         </Text>
         </Box>

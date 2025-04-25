@@ -177,6 +177,7 @@ export default function SearchBox() {
     });
   };
 
+  
   return (
     <View style={styles.container}>
       <ScrollView

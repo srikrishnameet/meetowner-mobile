@@ -18,7 +18,6 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 18,
-    
     marginBottom: 12,
     color: "#000",
     fontFamily:'PoppinsSemiBold'

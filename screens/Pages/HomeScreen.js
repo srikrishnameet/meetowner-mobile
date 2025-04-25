@@ -20,7 +20,7 @@ import FilterTabs from "./components/FilterTabs";
 import HomeWrapper from "./components/HomeScreenWrapper/HomeWrapper";
 
 export default function HomeScreen() {
-  const navigation = useNavigation();
+  
   const [activeTab, setActiveTab] = useState("Sell");
   const [selectedCity, setSelectedCity] = useState("Hyderabad");
 
@@ -138,6 +138,8 @@ export default function HomeScreen() {
       return () => backHandler.remove();
     }, [exitCount])
   );
+  const componentBackgroundColor = "#F6F6F6";
+
 
   return (
     <KeyboardAvoidingView
@@ -146,7 +148,7 @@ export default function HomeScreen() {
     >
       <SafeAreaProvider>
         <SafeAreaView style={styles.safeArea}>
-          <StatusBar barStyle="dark-content" backgroundColor="#f5f5f5" />
+        <StatusBar barStyle="dark-content" backgroundColor={componentBackgroundColor} />
           <ScrollView
             style={styles.contentContainer}
             showsVerticalScrollIndicator={false}

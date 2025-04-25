@@ -36,6 +36,22 @@ const CustomHeader = ({ navigation, title, route, icon }) => {
   );
 };
 
+const CustomHeaderProperties = ({ navigation, title, route, icon }) => {
+  return (
+    <HStack
+      style={styles.headerProperties}
+      justifyContent="start"
+      alignItems="center"
+    >
+      <Pressable onPress={() => navigation.goBack()} style={styles.iconButton}>
+        <Icon as={Ionicons} name="chevron-back-outline" size={6} color="#000" />
+      </Pressable>
+      <Text style={styles.title}>{title}</Text>
+     
+    </HStack>
+  );
+};
+
 
 
 export default function MainNav() {
@@ -120,9 +136,9 @@ export default function MainNav() {
             component={PropertyLists}
             options={({ navigation }) => ({
               header: () => (
-                <CustomHeader
+                <CustomHeaderProperties
                   navigation={navigation}
-                  title="Property Lists"
+                  title="Properties"
                   route="Wishlist"
                   icon="heart-outline"
                 />
@@ -145,12 +161,20 @@ const styles = StyleSheet.create({
     borderBottomColor:'#DBDADA'
    
   },
+  headerProperties:{
+    
+    paddingTop: Platform.OS === "ios" ? 50 : 20,
+   
+    backgroundColor: '#F5F5F5',
+ 
+  },
   iconButton: {
     padding: 8,
   },
   title: {
     fontSize: 18,
-    fontWeight: "bold",
+    marginLeft:10,
     color: "#000",
+    fontFamily:'PoppinsSemiBold'
   },
 });
