@@ -97,9 +97,7 @@ const PropertyCard = memo(
           <View style={styles.buttonContainer}>
               <TouchableOpacity
                 style={styles.viewAllButton}
-               
                 onPress={() => onViewAll && onViewAll()}
-               
               >
                 <Text style={styles.viewAllText}>View All Projects</Text>
               </TouchableOpacity>
@@ -253,7 +251,7 @@ export default function HousePickProperties({ activeTab }) {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
-      <View style={{ flex: 1 }}>
+    
        
         <View style={{ flex: 1, }}>
           <FlatList
@@ -275,7 +273,7 @@ export default function HousePickProperties({ activeTab }) {
             maxToRenderPerBatch={4}
             updateCellsBatchingPeriod={50}
             removeClippedSubviews={true}
-            contentContainerStyle={{ paddingHorizontal: 5, }}
+           
             ListEmptyComponent={() =>
               !loading && <NBText textAlign={"center"}>No properties found.</NBText>
             }
@@ -288,7 +286,7 @@ export default function HousePickProperties({ activeTab }) {
             }
           />
         </View>
-      </View>
+     
       <ContactActionSheet
             isOpen={modalVisible}
             onClose={() => {
@@ -307,7 +305,7 @@ export default function HousePickProperties({ activeTab }) {
 const styles = StyleSheet.create({
   container: {
     marginVertical: 10,
-    paddingHorizontal: 5,
+    paddingHorizontal: 10,
   },
   cardContainer: {
     width: "100%",

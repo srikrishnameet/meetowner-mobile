@@ -32,7 +32,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import config from "../../config";
 import { useDispatch, useSelector } from "react-redux";
 import axios from "axios";
-import { setIntrestedProperties } from "../../store/slices/propertyDetails";
+import { setIntrestedProperties, setPropertyDetails } from "../../store/slices/propertyDetails";
 import PropertyImage from "./components/propertyDetailsComponents/PropertyImage";
 import WhatsAppIcon from '../../assets/propertyicons/whatsapp.png';
 import ApprovedIcon from '../../assets/propertyicons/approved.png';
@@ -83,10 +83,7 @@ export default function Wishlist() {
   
 
   // Placeholder for navigation (implement as needed)
-  const onNavigate = (item) => {
-    console.log("Navigating to property:", item.unique_property_id);
-  };
-
+ 
 
    
   
@@ -101,7 +98,7 @@ export default function Wishlist() {
   };
 
   // PropertyCard component
-  const PropertyCard = memo(({ item, onShare, onFav }) => {
+  const PropertyCard = memo(({ item, onShare, onFav,onNavigate }) => {
     const area = item.builtup_area
       ? `${item.builtup_area} sqft`
       : `${item.length_area || 0} x ${item.width_area || 0} sqft`;
@@ -339,6 +336,12 @@ export default function Wishlist() {
     shareProperty(item);
   }, []);
 
+  const onNavigate = (item) => {
+    dispatch(setPropertyDetails(item));
+    navigation.navigate("PropertyDetails");
+    
+  };
+
   // Fetch user details and properties on mount
   useEffect(() => {
     const getData = async () => {
@@ -402,6 +405,7 @@ export default function Wishlist() {
                     item={item}
                     onFav={handleUnFavourites}
                     onShare={handleShare}
+                    onNavigate={onNavigate}
                   />
                 </View>
               )}

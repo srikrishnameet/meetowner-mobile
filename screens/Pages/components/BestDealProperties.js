@@ -44,14 +44,14 @@ import ContactActionSheet from "./propertyDetailsComponents/ContactActionSheet";
 const PropertyCard = memo(
   ({ item, onPress, onFav, onShare, intrestedProperties, enquireNow, isHighlighted = false }) => {
     const isInitiallyInterested = (intrestedProperties || [])?.some(
-      (prop) =>
-        prop?.property_details?.unique_property_id === item?.unique_property_id
-    );
+          (prop) =>
+            prop === item?.unique_property_id
+        );
     const [isLiked, setIsLiked] = useState(isInitiallyInterested);
   
     const handleFavClick = () => {
-      onFav(item, !isLiked);
-      setIsLiked((prev) => !prev);
+      onFav(item, !isLiked); // Pass the item and the new liked state
+      setIsLiked((prev) => !prev); // Toggle local state
     };
   
     // Map item properties to the example's property object structure
@@ -80,11 +80,11 @@ const PropertyCard = memo(
         <View style={styles.imageContainer}>
           <Image source={{ uri: property.image }} style={styles.image} alt="property" />
           <View style={styles.actionButtons}>
-            <TouchableOpacity style={styles.iconButton} onPress={handleFavClick}>
+          <TouchableOpacity style={styles.iconButton} onPress={handleFavClick}>
               <Ionicons
                 name={isLiked ? "heart" : "heart-outline"}
                 size={18}
-                color="#fff"
+                color={isLiked ? "#FE4B09" : "#fff"}
               />
             </TouchableOpacity>
             <TouchableOpacity style={styles.iconButton} onPress={() => onShare(item)}>
@@ -158,7 +158,7 @@ const formatToIndianCurrency = (value) => {
 };
 
 export default function BestDealProperties({ activeTab }) {
-  const intrests = useSelector((state) => state.property.intrestedProperties);
+ const intrestedProperties  = useSelector((state) => state.property.intrestedProperties);
   const dispatch = useDispatch();
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -176,99 +176,131 @@ export default function BestDealProperties({ activeTab }) {
   const [userInfo, setUserInfo] = useState("");
 
   const fetchProperties = useCallback(
-     async (reset = true) => {
-       setLoading(true);
-       try {
-         const response = await fetch(
-           "https://api.meetowner.in/listings/v1/getBestDeals"
-         );
-         const data = await response.json();
-       
-         if (data.results && data.results.length > 0) {
-           const newProperties = reset
-             ? data.results
-             : [...properties, ...data.results];
-           setProperties(newProperties);
-          
-         } else {
-           setHasMore(false);
-         }
-       } catch (error) {
-         console.error("Error fetching properties:", error);
-       } finally {
-         setLoading(false);
-         if (reset) setRefreshing(false);
-       }
-     },
-     [activeTab, properties]
-   );
+    async (reset = true) => {
+      setLoading(true);
+      try {
+        const response = await fetch(
+          "https://api.meetowner.in/listings/v1/getBestDeals"
+        );
+        const data = await response.json();
+      
+        if (data.results && data.results.length > 0) {
+          const newProperties = reset
+            ? data.results
+            : [...properties, ...data.results];
+          setProperties(newProperties);
+         
+        } else {
+          setHasMore(false);
+        }
+      } catch (error) {
+        console.error("Error fetching properties:", error);
+      } finally {
+        setLoading(false);
+        if (reset) setRefreshing(false);
+      }
+    },
+    [activeTab, properties]
+  );
 
-  const handleInterestAPI = async (unique_property_id, action) => {
+  const handleInterestAPI = async (property, isAlreadyLiked) => {
+    if (!userInfo) {
+      Toast.show({
+        placement: "top-right",
+        render: () => (
+          <Box bg="yellow.300" px="2" py="1" mr={5} rounded="sm" mb={5}>
+            Please log in to save property!
+          </Box>
+        ),
+      });
+      return;
+    }
+
+    // Optimistically update Redux state
+    const propertyId = property.unique_property_id;
+    dispatch(
+      setIntrestedProperties(
+        isAlreadyLiked
+          ? intrestedProperties.filter((id) => id !== propertyId)
+          : [...intrestedProperties, propertyId]
+      )
+    );
+    const payload = {
+      User_user_id: userInfo.user_id,
+      userName: userInfo.name,
+      userEmail: userInfo?.email || "N/A",
+      userMobile: userInfo.mobile,
+      ...property,
+      status: isAlreadyLiked ? 1 : 0, 
+    };
     try {
-      const url = `${config.mainapi_url}/favourites_exe.php?user_id=${userInfo.user_id}&unique_property_id=${unique_property_id}&action=${action}&intrst=1&name=${userInfo?.name}&mobile=${userInfo?.mobile}&email=${userInfo?.email}`;
-      await fetch(url, {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-        },
+      const res =  await axios.post(`${config.awsApiUrl}/fav/v1/postIntrest`, payload);
+      await fetchIntrestedProperties(userInfo);
+      Toast.show({
+        placement: "top-right",
+        render: () => (
+          <Box bg="green.300" px="2" py="1" mr={5} rounded="sm" mb={5}>
+            {isAlreadyLiked ? "Removed from favorites" : "Added to favorites"}
+          </Box>
+        ),
       });
     } catch (error) {
+      console.error("Error posting interest:", error);
+     
+      dispatch(
+        setIntrestedProperties(
+          isAlreadyLiked
+            ? [...intrestedProperties, propertyId]
+            : intrestedProperties.filter((id) => id !== propertyId)
+        )
+      );
       Toast.show({
         placement: "top-right",
         render: () => (
           <Box bg="red.300" px="2" py="1" mr={5} rounded="sm" mb={5}>
-            Something went wrong. Please try again.
+            Failed to update favorite. Please try again.
           </Box>
         ),
       });
     }
   };
 
-  const handleMetrics = async (property, type) => {
+  const fetchIntrestedProperties = async (userInfo) => {
     try {
-      await axios.post("https://api.meetowner.in/metrics/saveAnalytics", {
-        user_id: userInfo?.user_id || "",
-        user_name: userInfo?.name || "",
-        mobile_number: userInfo?.mobile || "",
-        location: property?.google_address || "N/A",
-        searched_query: property?.property_name || "N/A",
-        unique_property_id: property?.unique_property_id || "N/A",
-        userContacts: "",
-        intrest_type: type || "",
-        created_at: "",
-      });
-    } catch (error) {
-      console.error("Error saving analytics:", error);
-    }
-  };
-
-  const handleIntrests = async (type, property, userInfo) => {
-    await handleMetrics(property, type);
-  };
-
-  const fetchIntrestedProperties = async () => {
-    try {
-      const response = await fetch(
-        `https://meetowner.in/Api/newapi?fetchtype=interested_property_fetch&user_id=${userInfo?.user_id}`
-      );
-      const data = await response.json();
-      if (response.status === 200) {
-        dispatch(setIntrestedProperties(data.data));
+      if (!userInfo?.user_id) {
+        console.warn("User ID not found in userInfo:", userInfo);
+        return;
       }
+      const response = await axios.get(
+        `${config.awsApiUrl}/fav/v1/getAllFavourites?user_id=${userInfo.user_id}`
+      );
+      const liked = response.data.favourites || [];
+      const likedIds = liked.map((fav) => fav.unique_property_id);
+      dispatch(setIntrestedProperties(likedIds));
     } catch (error) {
       console.error("Error fetching interested properties:", error);
+      
     }
   };
 
   useEffect(() => {
     const getData = async () => {
-      const data = await AsyncStorage.getItem("userdetails");
-      const parsedUserDetails = JSON.parse(data);
-      setUserInfo(parsedUserDetails);
+      try {
+        const data = await AsyncStorage.getItem("userdetails");
+        if (data) {
+          const parsedUserDetails = JSON.parse(data);
+       
+          setUserInfo(parsedUserDetails);
+          await fetchIntrestedProperties(parsedUserDetails); // Call with user details
+        } else {
+          console.warn("No user details found in AsyncStorage");
+        }
+        await fetchProperties(true);
+      } catch (error) {
+        console.error("Error fetching user details:", error);
+      }
     };
     getData();
-    fetchProperties(true);
-    fetchIntrestedProperties();
   }, []);
 
   useEffect(() => {
@@ -278,12 +310,14 @@ export default function BestDealProperties({ activeTab }) {
     return () => clearInterval(interval);
   }, []);
 
-  const shareProperty = async (property) => {
+const shareProperty = async (property) => {
     try {
       await Share.share({
-        message: `https://api.meetowner.in/property?unique_property_id=${property.unique_property_id}`,
+        title: property.name || 'Check out this property!',
+        message: `${property.name}\nLocation: ${property.location}\nhttps://api.meetowner.in/property?unique_property_id=${property.unique_property_id}`,
+        url: `https://api.meetowner.in/property?unique_property_id=${property.unique_property_id}`,
       });
-      await handleIntrests("shared", property, userInfo);
+      
     } catch (error) {
       console.error("Error sharing property:", error);
     }
@@ -300,12 +334,12 @@ export default function BestDealProperties({ activeTab }) {
     setSelectedPropertyId(null);
   };
 
-  const handleFavourites = useCallback(
+ const handleFavourites = useCallback(
     async (item, isLiked) => {
       try {
         const action = isLiked ? 0 : 1;
-        // await handleInterestAPI(item.unique_property_id, action);
-        await handleIntrests("favourites", item, userInfo);
+        await handleInterestAPI(item, action);
+        // await handleIntrests("favourites", item, userInfo);
       } catch (error) {
         console.error("Error handling favourites:", error);
       }
@@ -327,34 +361,34 @@ export default function BestDealProperties({ activeTab }) {
   }, [navigation, activeTab]);
 
   const renderPropertyCard = useCallback(
-    ({ item }) => {
-      if (!item || !item.unique_property_id) {
-        return null;
-      }
-      const isLiked = intrests?.some(
-        (prop) =>
-          prop?.property_details?.unique_property_id ===
-          item?.unique_property_id
-      );
-      return (
-        <PropertyCard
-          item={item}
-          onPress={() => handleNavigate(item)}
-          onFav={(item, isLiked) => handleFavourites(item, isLiked)}
-          onShare={() => handleShare(item)}
-          isLiked={isLiked}
-          intrestedProperties={intrests}
-          enquireNow={() => {
-            setType("enquireNow");
-            setSelectedPropertyId(item);
-            setModalVisible(true);
-          }}
-          isHighlighted={false}
-        />
-      );
-    },
-    [handleFavourites, handleShare, handleNavigate, intrests]
-  );
+      ({ item }) => {
+        if (!item || !item.unique_property_id) {
+          return null;
+        }
+        const isLiked = intrestedProperties?.some(
+          (prop) =>
+            prop?.property_details?.unique_property_id ===
+            item?.unique_property_id
+        );
+        return (
+          <PropertyCard
+            item={item}
+            onPress={() => handleNavigate(item)}
+            onFav={(item, isLiked) => handleFavourites(item, isLiked)}
+            onShare={() => handleShare(item)}
+           
+            intrestedProperties={intrestedProperties}
+            enquireNow={() => {
+              setType("enquireNow");
+              setSelectedPropertyId(item);
+              setModalVisible(true);
+            }}
+            isHighlighted={false}
+          />
+        );
+      },
+      [handleFavourites, handleShare, handleNavigate, intrestedProperties]
+    );
 
   const handleScroll = (event) => {
     const offsetY = event.nativeEvent.contentOffset.y;

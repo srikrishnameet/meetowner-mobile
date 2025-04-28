@@ -15,11 +15,11 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useDispatch, useSelector } from "react-redux";
-import { setPropertyDetails } from "../../../store/slices/propertyDetails";
+import { setIntrestedProperties, setPropertyDetails } from "../../../store/slices/propertyDetails";
 import config from "../../../config";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
-import { BackHandler,StyleSheet,RefreshControl } from "react-native";
+import { BackHandler,StyleSheet,RefreshControl, TouchableOpacity } from "react-native";
 import UserAvatar from "./propertyDetailsComponents/UserAvatar";
 import WhatsAppIcon from '../../../assets/propertyicons/whatsapp.png';
 import ApprovedIcon from '../../../assets/propertyicons/approved.png';
@@ -36,20 +36,39 @@ const userTypeMap = {
 };
 
 const PropertyCard = memo(
-  ({ item, onFav, onNavigate, userDetails, contactNow }) => {
+  ({ item, onFav, onNavigate, userDetails,onShare,intrestedProperties, contactNow }) => {
     const area = item.builtup_area
       ? `${item.builtup_area} sqft`
       : `${item.length_area || 0} x ${item.width_area || 0} sqft`;
 
-    const handleFavClick = async (type, item, action) => {
-      await onFav(type, item, action);
-    };
+    const isInitiallyInterested = (intrestedProperties || [])?.some(
+         (prop) =>
+           prop === item?.unique_property_id
+       );
+       const [isLiked, setIsLiked] = useState(isInitiallyInterested);
+       
+       const handleFavClick = () => {
+         onFav(item, !isLiked); // Pass the item and the new liked state
+         setIsLiked((prev) => !prev); // Toggle local state
+       };
 
     return (
       <View style={styles.containerVstack}>
         <Pressable onPress={() => onNavigate(item)}>
           <VStack alignItems="flex-start">
           <PropertyImage item={item} />
+          <View style={styles.actionButtons}>
+            <TouchableOpacity style={styles.iconButton} onPress={handleFavClick}>
+              <Ionicons
+                name={isLiked ? "heart" : "heart-outline"}
+                size={18}
+                color={isLiked ? "#FE4B09" : "#fff"}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.iconButton} onPress={() => onShare(item)}>
+              <Ionicons name="share-social-outline" size={18} color="#fff" />
+            </TouchableOpacity>
+          </View>
             <HStack>
               <Text style={styles.possesionText}>
                 {item?.occupancy === 'Ready to move'
@@ -152,6 +171,7 @@ const formatToIndianCurrency = (value) => {
 };
 
 export default function PropertyLists({ route }) {
+  const intrestedProperties  = useSelector((state) => state.property.intrestedProperties);
   const { prevSearch } = route.params || {};
   const [propertyLoading, setPropertyLoading] = useState(false);
   const maxLimit = 50;
@@ -173,6 +193,7 @@ export default function PropertyLists({ route }) {
   const [selectedItem, setSelectedItem] = useState(null);
   const locationCacheRef = useRef({});
   const prefetchedUrlsRef = useRef(new Set());
+    const [userInfo, setUserInfo] = useState("");
 
   const { tab, property_in, sub_type, bhk, occupancy, location, price } = useSelector(
     (state) => state.search
@@ -334,45 +355,109 @@ export default function PropertyLists({ route }) {
   );
 
   useEffect(() => {
-    fetchProperties(true, filters, location || prevSearch || "Hyderabad");
+    const getData = async () => {
+      try {
+        const data = await AsyncStorage.getItem("userdetails");
+        if (data) {
+          const parsedUserDetails = JSON.parse(data);
+       
+          setUserInfo(parsedUserDetails);
+          await fetchIntrestedProperties(parsedUserDetails); // Call with user details
+        } else {
+          console.warn("No user details found in AsyncStorage");
+        }
+        fetchProperties(true, filters, location || prevSearch || "Hyderabad");
+      } catch (error) {
+        console.error("Error fetching user details:", error);
+      }
+    };
+    getData();
+   
   }, []);
 
-  const handleInterestAPI = async (unique_property_id, action) => {
-    try {
-      const url = `${config.mainapi_url}/favourites_exe.php?user_id=${userDetails?.user_id}&unique_property_id=${unique_property_id}&action=0&intrst=1&name=${userDetails?.name}&mobile=${userDetails?.mobile}&email=${userDetails?.email}`;
-      await fetch(url, { method: "POST", headers: { Accept: "application/json" } });
-      await fetch(
-        `${config.mainapi_url}/favourites_exe?user_id=${userDetails.user_id}&unique_property_id=${unique_property_id}&intrst=1&action=${action}`
+   const handleInterestAPI = async (property, isAlreadyLiked) => {
+      if (!userInfo) {
+        Toast.show({
+          placement: "top-right",
+          render: () => (
+            <Box bg="yellow.300" px="2" py="1" mr={5} rounded="sm" mb={5}>
+              Please log in to save property!
+            </Box>
+          ),
+        });
+        return;
+      }
+  
+      // Optimistically update Redux state
+      const propertyId = property.unique_property_id;
+      dispatch(
+        setIntrestedProperties(
+          isAlreadyLiked
+            ? intrestedProperties.filter((id) => id !== propertyId)
+            : [...intrestedProperties, propertyId]
+        )
       );
+      const payload = {
+        User_user_id: userInfo.user_id,
+        userName: userInfo.name,
+        userEmail: userInfo?.email || "N/A",
+        userMobile: userInfo.mobile,
+        ...property,
+        status: isAlreadyLiked ? 1 : 0, 
+      };
+      console.log("payload: ", payload);
+
+      try {
+        const res =  await axios.post(`${config.awsApiUrl}/fav/v1/postIntrest`, payload);
+        await fetchIntrestedProperties(userInfo);
+        Toast.show({
+          placement: "top-right",
+          render: () => (
+            <Box bg="green.300" px="2" py="1" mr={5} rounded="sm" mb={5}>
+              {isAlreadyLiked ? "Removed from favorites" : "Added to favorites"}
+            </Box>
+          ),
+        });
+      } catch (error) {
+        console.error("Error posting interest:", error);
+       
+        dispatch(
+          setIntrestedProperties(
+            isAlreadyLiked
+              ? [...intrestedProperties, propertyId]
+              : intrestedProperties.filter((id) => id !== propertyId)
+          )
+        );
+        Toast.show({
+          placement: "top-right",
+          render: () => (
+            <Box bg="red.300" px="2" py="1" mr={5} rounded="sm" mb={5}>
+              Failed to update favorite. Please try again.
+            </Box>
+          ),
+        });
+      }
+    };
+  
+  const fetchIntrestedProperties = async (userInfo) => {
+    try {
+      if (!userInfo?.user_id) {
+        console.warn("User ID not found in userInfo:", userInfo);
+        return;
+      }
+      const response = await axios.get(
+        `${config.awsApiUrl}/fav/v1/getAllFavourites?user_id=${userInfo.user_id}`
+      );
+      const liked = response.data.favourites || [];
+      const likedIds = liked.map((fav) => fav.unique_property_id);
+      dispatch(setIntrestedProperties(likedIds));
     } catch (error) {
-      Toast.show({
-        placement: "top-right",
-        render: () => (
-          <Box bg="red.300" px="2" py="1" mr={5} rounded="sm" mb={5}>
-            Something went wrong. Please try again.
-          </Box>
-        ),
-      });
+      console.error("Error fetching interested properties:", error);
+      
     }
   };
 
-  const handleMetrics = async (property, type) => {
-    try {
-      await axios.post("https://api.meetowner.in/metrics/saveAnalytics", {
-        user_id: userDetails?.user_id || "",
-        user_name: userDetails?.name || "",
-        mobile_number: userDetails?.mobile || "",
-        location: property?.google_address || "N/A",
-        searched_query: property?.property_name || "N/A",
-        unique_property_id: property?.unique_property_id || "N/A",
-        userContacts: "",
-        intrest_type: type || "",
-        created_at: "",
-      });
-    } catch (error) {
-      console.error("Error saving metrics:", error);
-    }
-  };
+ 
 
   const getOwnerDetails = async (unique_property_id) => {
     try {
@@ -438,11 +523,11 @@ export default function PropertyLists({ route }) {
   };
 
   const handleFavourites = useCallback(
-    async (type, item, action) => {
+    async ( item, action) => {
       try {
-        await handleAPI(item);
-        await handleInterestAPI(item.unique_property_id, action);
-        await handleMetrics(item, type);
+        // await handleAPI(item);
+        await handleInterestAPI(item, action);
+        
       } catch (error) {
         console.error("Error in handleFavourites:", error);
         Toast.show({
@@ -457,6 +542,23 @@ export default function PropertyLists({ route }) {
     },
     [userDetails]
   );
+
+    const shareProperty = async (property) => {
+      try {
+        await Share.share({
+          title: property.name || 'Check out this property!',
+          message: `${property.name}\nLocation: ${property.location}\nhttps://api.meetowner.in/property?unique_property_id=${property.unique_property_id}`,
+          url: `https://api.meetowner.in/property?unique_property_id=${property.unique_property_id}`,
+        });
+        
+      } catch (error) {
+        console.error("Error sharing property:", error);
+      }
+    };
+  
+    const handleShare = useCallback((item) => {
+      shareProperty(item);
+    }, []);
 
   const handleNavigate = useCallback(
     (item) => {
@@ -493,10 +595,12 @@ export default function PropertyLists({ route }) {
         onFav={handleFavourites}
         onNavigate={handleNavigate}
         userDetails={userDetails}
+        onShare={() => handleShare(item)}
+        intrestedProperties={intrestedProperties}
         contactNow={contactNow}
       />
     ),
-    [handleFavourites, handleNavigate, userDetails]
+    [handleFavourites, handleNavigate, userDetails,intrestedProperties]
   );
 
   const handleScroll = useCallback((event) => {
@@ -710,5 +814,20 @@ const styles = StyleSheet.create({
     color: "#000",
     fontFamily: 'PoppinsSemiBold',
     fontSize: 14,
-  }
+  },
+  actionButtons: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    flexDirection: "column",
+    gap: 8,
+  },
+  iconButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
 });
