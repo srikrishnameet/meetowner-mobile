@@ -304,7 +304,7 @@ export default function BestDealProperties({ activeTab }) {
     async (item, isLiked) => {
       try {
         const action = isLiked ? 0 : 1;
-        await handleInterestAPI(item.unique_property_id, action);
+        // await handleInterestAPI(item.unique_property_id, action);
         await handleIntrests("favourites", item, userInfo);
       } catch (error) {
         console.error("Error handling favourites:", error);

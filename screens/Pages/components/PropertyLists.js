@@ -26,6 +26,7 @@ import ApprovedIcon from '../../../assets/propertyicons/approved.png';
 import SearchBarProperty from "./propertyDetailsComponents/SearchBarProperty";
 import FilterBar from "./propertyDetailsComponents/FilterBar";
 import debounce from "lodash/debounce";
+import PropertyImage from "./propertyDetailsComponents/PropertyImage";
 
 const userTypeMap = {
   3: "Builder",
@@ -48,19 +49,7 @@ const PropertyCard = memo(
       <View style={styles.containerVstack}>
         <Pressable onPress={() => onNavigate(item)}>
           <VStack alignItems="flex-start">
-            <Image
-              source={{
-                uri:
-                  item?.image && item.image.trim() !== ""
-                    ? `https://api.meetowner.in/uploads/${item.image}`
-                    : `https://placehold.co/200x100@3x.png?text=${item?.property_name}`,
-              }}
-              alt="Property Image"
-              w={400}
-              h={200}
-              resizeMode="cover"
-              style={{ borderTopLeftRadius: 20, borderTopRightRadius: 20 }}
-            />
+          <PropertyImage item={item} />
             <HStack>
               <Text style={styles.possesionText}>
                 {item?.occupancy === 'Ready to move'
@@ -149,8 +138,8 @@ const mapTabToPropertyFor = (tab) => {
   const mapping = {
     Buy: "Sell",
     Rent: "Rent",
-    Plot: "Plot",
-    Commercial: "Commercial",
+    Plot: "Sell",
+    Commercial: "Sell",
   };
   return mapping[tab] || "Sell"; // Default to "Sell" if tab is invalid
 };
@@ -165,7 +154,6 @@ const formatToIndianCurrency = (value) => {
 export default function PropertyLists({ route }) {
   const { prevSearch } = route.params || {};
   const [propertyLoading, setPropertyLoading] = useState(false);
-  console.log(propertyLoading)
   const maxLimit = 50;
   const dispatch = useDispatch();
   const navigation = useNavigation();
@@ -184,11 +172,11 @@ export default function PropertyLists({ route }) {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const locationCacheRef = useRef({});
+  const prefetchedUrlsRef = useRef(new Set());
 
-  const { tab, property_in, sub_type, bhk, occupancy, location,price } = useSelector(
+  const { tab, property_in, sub_type, bhk, occupancy, location, price } = useSelector(
     (state) => state.search
   );
-
 
   const [filters, setFilters] = useState({
     property_for: mapTabToPropertyFor(tab) || "Sell",
@@ -202,52 +190,71 @@ export default function PropertyLists({ route }) {
     property_status: 1,
   });
 
-   // Update filters when Redux state changes
-   useEffect(() => {
-    setFilters((prev) => ({
-      ...prev,
-      property_for: mapTabToPropertyFor(tab) || prev.property_for,
-      property_in: property_in || prev.property_in,
-      sub_type: sub_type || prev.sub_type,
-      bedrooms: bhk || prev.bedrooms,
-      occupancy: occupancy || prev.occupancy,
-      search: location || prev.search,
-      priceFilter: price || prev.priceFilter, 
-      
-    }));
+  // Update filters when Redux state changes
+  useEffect(() => {
+    const updatedFilters = {
+      property_for: mapTabToPropertyFor(tab) || "Sell",
+      property_in: property_in || (tab === "Commercial" ? "Commercial" : tab === "Plot" ? "" : "Residential"),
+      sub_type: sub_type || (tab === "Plot" ? "Plot" : tab === "Commercial" ? "" : "Apartment"),
+      bedrooms: bhk || "",
+      occupancy: occupancy || "",
+      search: location || prevSearch || "",
+      priceFilter: price || "Relevance",
+      property_cost: "",
+      property_status: 1,
+    };
+    setFilters(updatedFilters);
     setSearchQuery(location || prevSearch || "");
     setPage(1);
     setProperties([]);
-    fetchProperties(true, {
-      property_for: mapTabToPropertyFor(tab) || "Sell",
-      property_in: property_in || "Residential",
-      sub_type: sub_type || "Apartment",
-      search: location || prevSearch || "",
-      bedrooms: bhk || "",
-      property_cost: "",
-      priceFilter: price || "Relevance", // Use Redux price
-      occupancy: occupancy || "",
-      property_status: 1,
-    });
-  }, [tab, property_in, sub_type, bhk, occupancy, location,price, prevSearch]);
+    fetchProperties(true, updatedFilters, location || prevSearch || "Hyderabad");
+  }, [tab, property_in, sub_type, bhk, occupancy, location, price, prevSearch]);
 
   const preloadImages = useCallback((nextProperties) => {
+    // Use ref directly to maintain Set instance
+    const prefetchedUrls = prefetchedUrlsRef.current;
+
+    // Prepare image URLs (limit to 4 properties)
     const imageUrls = nextProperties
       .slice(0, 4)
-      .map((item) =>
-        item?.image && item.image.trim() !== ""
+      .map((item) => {
+        const imageUrl = item?.image && item.image.trim() !== ""
           ? `https://api.meetowner.in/uploads/${item.image}`
-          : `https://placehold.co/200x100@3x.png?text=${item?.property_name || "Property"}`
-      )
-      .filter(Boolean);
-    imageUrls.forEach((url) => Image.prefetch(url).catch((err) => console.warn("Image prefetch failed:", err)));
-  }, []);
+          : null;
+        const placeholderUrl = `https://placehold.co/200x100@3x.png?text=${encodeURIComponent(item?.property_name || "Property")}`;
+        return { imageUrl, placeholderUrl };
+      })
+      .filter((entry) => entry.imageUrl || entry.placeholderUrl);
 
+    // Prefetch images in parallel with concurrency limit
+    const prefetchImages = async () => {
+      const prefetchPromises = imageUrls.map(async ({ imageUrl, placeholderUrl }) => {
+        const urlToPrefetch = imageUrl && !prefetchedUrls.has(imageUrl) ? imageUrl : placeholderUrl;
+        if (prefetchedUrls.has(urlToPrefetch)) return; // Skip if already prefetched
+
+        try {
+          await Image.prefetch(urlToPrefetch);
+          prefetchedUrls.add(urlToPrefetch); // Mark as prefetched
+        } catch (err) {
+          console.warn(`Prefetch failed for ${urlToPrefetch}:`, err);
+        }
+      });
+
+      // Limit concurrency to prevent network overload
+      const concurrencyLimit = 2;
+      for (let i = 0; i < prefetchPromises.length; i += concurrencyLimit) {
+        await Promise.all(prefetchPromises.slice(i, i + concurrencyLimit));
+      }
+    };
+
+    // Execute prefetching
+    prefetchImages().catch((err) => console.warn("Error in prefetchImages:", err));
+  }, []);
+  
   const mapPriceFilterToApiValue = (priceFilter) => {
     const validFilters = ["Relevance", "Price: Low to High", "Price: High to Low", "Newest First"];
     return validFilters.includes(priceFilter) ? priceFilter : "Relevance";
   };
-
 
   const fetchProperties = useCallback(
     async (reset = false, appliedFilters = filters, searchedLocation) => {
@@ -329,7 +336,6 @@ export default function PropertyLists({ route }) {
   useEffect(() => {
     fetchProperties(true, filters, location || prevSearch || "Hyderabad");
   }, []);
-
 
   const handleInterestAPI = async (unique_property_id, action) => {
     try {
@@ -476,7 +482,6 @@ export default function PropertyLists({ route }) {
   };
 
   const handleSubmit = (formData) => {
-    
     setModalVisible(false);
     setSelectedItem(null);
   };
@@ -518,27 +523,23 @@ export default function PropertyLists({ route }) {
       fetchProperties(false);
     }
   }, [paginationLoading, hasMore, fetchProperties]);
-  
 
   const handleLocationSearch = useCallback(
     (query) => {
       setSearchQuery(query);
       setPage(1);
       setProperties([]);
-      fetchProperties(true, filters, query);
+      fetchProperties(true, filters, query || "Hyderabad");
     },
     [filters, fetchProperties]
   );
 
   return (
     <View style={styles.container}>
-     <SearchBarProperty
+      <SearchBarProperty
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
-        handleLocationSearch={(query) => {
-          setSearchQuery(query);
-          fetchProperties(true, filters, query || "Hyderabad");
-        }}
+        handleLocationSearch={handleLocationSearch}
         fetchProperties={fetchProperties}
         filters={filters}
         setFilters={setFilters}
@@ -584,13 +585,9 @@ export default function PropertyLists({ route }) {
             ) : null
           }
         />
-
       ) : (
         <View style={styles.noPropertiesContainer}>
-          <Text style={styles.noPropertiesText}>
-            No properties found for{" "}
-           
-          </Text>
+          <Text style={styles.noPropertiesText}>No properties found</Text>
         </View>
       )}
       {showScrollToTop && (
@@ -605,7 +602,6 @@ export default function PropertyLists({ route }) {
           onPress={scrollToTop}
         />
       )}
-    
     </View>
   );
 }
@@ -704,4 +700,15 @@ const styles = StyleSheet.create({
     padding: 20,
     alignItems: "center",
   },
+  noPropertiesContainer:{
+    justifyContent: "center",
+    alignItems: "center",
+    margin: 5,
+    paddingHorizontal: 15,
+  },
+  noPropertiesText:{
+    color: "#000",
+    fontFamily: 'PoppinsSemiBold',
+    fontSize: 14,
+  }
 });

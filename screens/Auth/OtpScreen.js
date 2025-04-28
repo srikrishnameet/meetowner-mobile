@@ -154,6 +154,7 @@ export default function OtpScreen() {
         ["usermobile", userDetails?.mobile || mobile],
         ["userdetails", JSON.stringify(userDetails)],
       ]);
+      console.log(userDetails);
       setLoading(false);
       setMessage("Admin access granted! 🚀");
       setError("");
