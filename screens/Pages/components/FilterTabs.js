@@ -1,15 +1,33 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { StyleSheet, Text, View, TouchableOpacity } from "react-native";
-
+import { setSearchData } from "../../../store/slices/searchSlice";
+import { useDispatch, useSelector } from "react-redux";
 const tabs = [
-  { id: "buy", label: "Buy" },
-  { id: "rent", label: "Rent" },
-  { id: "plot", label: "Plot" },
-  { id: "commercial", label: "Commercial" },
+  { id: "Buy", label: "Buy" },
+  { id: "Rent", label: "Rent" },
+  { id: "Plot", label: "Plot" },
+  { id: "Commercial", label: "Commercial" },
 ];
 
 export default function FilterTabs() {
-  const [activeTab, setActiveTab] = useState("buy");
+  const data = useSelector((state)=> state.search.tab)
+  console.log("redux",data)
+  const dispatch =useDispatch()
+  const [activeTab, setActiveTab] = useState(data || "Buy");
+  console.log(activeTab)
+  const handleTabChange=(id)=>{
+    console.log("id",id)
+    setActiveTab(id)
+    dispatch(setSearchData(
+      {
+        tab:id
+      }
+    ))
+  }
+
+  useEffect(()=>{
+    setActiveTab(data || "Buy")
+  },[data])
 
   return (
     <View style={styles.container}>
@@ -20,7 +38,7 @@ export default function FilterTabs() {
             styles.tab,
             activeTab === tab.id && styles.activeTab,
           ]}
-          onPress={() => setActiveTab(tab.id)}
+          onPress={() => handleTabChange(tab.id)}
         >
           <Text
             style={[

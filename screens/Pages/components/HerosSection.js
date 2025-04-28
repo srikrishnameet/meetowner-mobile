@@ -193,7 +193,7 @@ export default function HerosSection({ setSelectedCity }) {
         </TouchableOpacity>
         <View style={{ flex: 1, position: "relative" }}>
           <TextInput
-            placeholder="Search city, locality, properties"
+            placeholder="Search locality"
             value={searchQuery}
             placeholderTextColor="#999"
             onPress={handlePropertiesLists}

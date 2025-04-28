@@ -10,7 +10,7 @@ import {
   FlatList,
   ActivityIndicator,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import {
   Box,
   HStack,
@@ -26,6 +26,21 @@ import { FilterSection } from "../SearchBarComponents/FilterSection";
 import { FilterOption } from "../SearchBarComponents/FilterOption";
 import debounce from "lodash/debounce";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useDispatch, useSelector } from "react-redux";
+import { setBHK, setOccupancy, setPropertyIn, setSearchData, setSubType,setLocation,setPrice } from "../../../../store/slices/searchSlice";
+
+// Mapping function for tab to property_for
+const mapTabToPropertyFor = (tab) => {
+  const mapping = {
+    Buy: "Sell",
+    Rent: "Rent",
+    Plot: "Plot",
+    Commercial: "Commercial",
+  };
+  return mapping[tab] || "Sell"; // Default to "Sell" if tab is invalid
+};
+
+
 
 const SearchBarProperty = ({
   searchQuery,
@@ -34,38 +49,52 @@ const SearchBarProperty = ({
   fetchProperties,
   filters,
   setFilters,
-  selectedCity, // Added prop for city
+  selectedCity="Hyderabad", // Added prop for city
 }) => {
   const { isOpen: isFilterOpen, onOpen: onOpenFilter, onClose: onCloseFilter } = useDisclose();
   const { isOpen: isSortOpen, onOpen: onOpenSort, onClose: onCloseSort } = useDisclose();
 
-  // State for search suggestions
-  const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery || "");
+  const dispatch = useDispatch();
+
+  const { tab, property_in, sub_type, bhk, occupancy, location ,price } = useSelector(
+    (state) => state.search
+  );
+
+  const [localSearchQuery, setLocalSearchQuery] = useState(location || searchQuery || "");
   const [suggestions, setSuggestions] = useState([]);
-  const [recentSuggestions, setRecentSuggestions] = useState([]); // Added for caching
+  const [recentSuggestions, setRecentSuggestions] = useState([]);
   const [loading, setLoading] = useState(false);
   const inputRef = useRef(null);
-  const MAX_CACHE_SIZE = 5; // Added for caching limit
+  const MAX_CACHE_SIZE = 5;
 
-  // State for filter options
-  const [selectedBuildingType, setSelectedBuildingType] = useState("");
-  const [selectedSubPropertyType, setSelectedSubPropertyType] = useState("");
-  const [selectedBedrooms, setSelectedBedrooms] = useState("");
-  const [selectedFurnishing, setSelectedFurnishing] = useState("");
-  const [selectedPostedBy, setSelectedPostedBy] = useState("");
-  const [selectedAmenities, setSelectedAmenities] = useState([]);
-  const [selectedPossession, setSelectedPossession] = useState("");
-
+  // State for filter options synced with Redux
+  const [selectedBuildingType, setSelectedBuildingType] = useState(property_in || filters.property_in || "");
+  const [selectedSubPropertyType, setSelectedSubPropertyType] = useState(sub_type || filters.sub_type || "");
+  const [selectedBedrooms, setSelectedBedrooms] = useState(bhk || filters.bedrooms || "");
+  // const [selectedFurnishing, setSelectedFurnishing] = useState(filters.furnishing_status || "");
+  // const [selectedPostedBy, setSelectedPostedBy] = useState(filters.posted_by || "");
+  // const [selectedAmenities, setSelectedAmenities] = useState(filters.amenities || []);
+  const [selectedPossession, setSelectedPossession] = useState(occupancy || filters.occupancy || "");
+  const [selectedSort, setSelectedSort] = useState(filters.priceFilter || "Relevance");
   // State for sort option
-  const [selectedSort, setSelectedSort] = useState("Relevance");
 
   // Sort options array
   const sortOptions = [
     "Relevance",
-    "Price - Low to High",
-    "Price - High to Low",
-    "Date Added",
+    "Price: Low to High",
+    "Price: High to Low",
+    "Newest First",
   ];
+
+  useEffect(() => {
+    setLocalSearchQuery(location || searchQuery || "");
+    setSelectedBuildingType(property_in || filters.property_in || "");
+    setSelectedSubPropertyType(sub_type || filters.sub_type || "");
+    setSelectedBedrooms(bhk || filters.bedrooms || "");
+    setSelectedPossession(occupancy || filters.occupancy || "");
+    setSelectedSort(price || filters.priceFilter || "Relevance"); // Sync with Redux price
+    setSearchQuery(location || searchQuery || "");
+  }, [location, property_in, sub_type, bhk, occupancy, price,searchQuery, filters]);
 
   // Load recent suggestions from AsyncStorage on mount
   useEffect(() => {
@@ -99,7 +128,7 @@ const SearchBarProperty = ({
   // Fetch suggestions based on city and query
   const fetchSuggestions = async (city, query) => {
     if (!query || query.length < 3 || !city) {
-      setSuggestions(recentSuggestions); // Show recent suggestions if query is too short
+      setSuggestions(recentSuggestions);
       return;
     }
     setLoading(true);
@@ -109,33 +138,25 @@ const SearchBarProperty = ({
           query
         )}&city=${encodeURIComponent(city)}`
       );
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`API error: ${response.status}`);
       const data = await response.json();
       const formattedSuggestions = data.map((item) => ({
         label: item.locality,
         value: item.locality,
       }));
-
-      // Merge with recentSuggestions, ensuring no duplicates
       const uniqueSuggestions = [
         ...recentSuggestions,
         ...formattedSuggestions.filter(
-          (suggestion) =>
-            !recentSuggestions.some((recent) => recent.value === suggestion.value)
+          (suggestion) => !recentSuggestions.some((recent) => recent.value === suggestion.value)
         ),
-      ].slice(0, 10); // Limit to 10 suggestions
-
+      ].slice(0, 10);
       setSuggestions(uniqueSuggestions);
-
-      // Save the first suggestion to cache if there are any API suggestions
       if (formattedSuggestions.length > 0) {
         saveToCache(formattedSuggestions[0]);
       }
     } catch (error) {
       console.error("Error fetching suggestions:", error);
-      setSuggestions(recentSuggestions); // Fallback to recent suggestions on error
+      setSuggestions(recentSuggestions);
     } finally {
       setLoading(false);
     }
@@ -143,10 +164,8 @@ const SearchBarProperty = ({
 
   // Debounce the fetchSuggestions function
   const debouncedFetchSuggestions = useCallback(
-    debounce((city, query) => {
-      fetchSuggestions(city, query);
-    }, 300),
-    [recentSuggestions] // Add recentSuggestions as a dependency
+    debounce((city, query) => fetchSuggestions(city, query), 300),
+    [recentSuggestions]
   );
 
   // Handle search input
@@ -154,33 +173,36 @@ const SearchBarProperty = ({
     (query) => {
       setLocalSearchQuery(query);
       setSearchQuery(query);
+      dispatch(setLocation(query)); // Update Redux location
       handleLocationSearch(query);
-      const city = selectedCity || "Hyderabad"; // Use selectedCity prop
+      const city = selectedCity;
       if (query.trim().length >= 3) {
         debouncedFetchSuggestions(city, query);
       } else {
-        setSuggestions(recentSuggestions); // Show recent suggestions when query is less than 3 characters
+        setSuggestions(recentSuggestions);
       }
     },
-    [selectedCity, setSearchQuery, handleLocationSearch, recentSuggestions]
+    [selectedCity, setSearchQuery, handleLocationSearch, recentSuggestions, debouncedFetchSuggestions, dispatch]
   );
 
   // Handle clear input
   const handleClear = () => {
     setLocalSearchQuery("");
     setSearchQuery("");
+    dispatch(setLocation("")); // Clear Redux location
     handleLocationSearch("");
     setSuggestions([]);
-    fetchProperties(false, filters, "Hyderabad", selectedSort);
+    fetchProperties(true, filters, "Hyderabad");
   };
 
   // Handle suggestion selection
   const handleSuggestionSelect = (item) => {
     setLocalSearchQuery(item.label);
     setSearchQuery(item.label);
+    dispatch(setLocation(item.label)); // Update Redux location
     handleLocationSearch(item.label);
     setSuggestions([]);
-    fetchProperties(true, filters, item.label, selectedSort);
+    fetchProperties(true, filters, item.label);
   };
 
   // Render suggestion item
@@ -197,74 +219,77 @@ const SearchBarProperty = ({
   const toggleBuildingType = (type) => setSelectedBuildingType(type);
   const toggleSubPropertyType = (type) => setSelectedSubPropertyType(type);
   const toggleBedroom = (type) => setSelectedBedrooms(type);
-  const toggleFurnishing = (type) => setSelectedFurnishing(type);
-  const togglePostedBy = (type) => setSelectedPostedBy(type);
-  const toggleAmenity = (type) =>
-    setSelectedAmenities((prev) =>
-      prev.includes(type) ? prev.filter((item) => item !== type) : [...prev, type]
-    );
+  // const toggleFurnishing = (type) => setSelectedFurnishing(type);
+  // const togglePostedBy = (type) => setSelectedPostedBy(type);
+  // const toggleAmenity = (type) =>
+  //   setSelectedAmenities((prev) =>
+  //     prev.includes(type) ? prev.filter((item) => item !== type) : [...prev, type]
+  //   );
   const togglePossession = (type) => setSelectedPossession(type);
 
   // Apply filters
   const applyFilters = () => {
     const updatedFilters = {
-      building_type: selectedBuildingType,
-      property_type: selectedSubPropertyType,
+      ...filters,
+      property_for: mapTabToPropertyFor(tab),
+      property_in: selectedBuildingType,
+      sub_type: selectedSubPropertyType,
       bedrooms: selectedBedrooms,
-      furnishing_status: selectedFurnishing,
-      posted_by: selectedPostedBy,
-      amenities: selectedAmenities,
-      possession_status: selectedPossession,
+      occupancy: selectedPossession,
+      priceFilter: selectedSort, // Use selectedSort
+      search: localSearchQuery.trim() || "Hyderabad",
     };
     setFilters(updatedFilters);
-    fetchProperties(
-      true,
-      updatedFilters,
-      localSearchQuery.trim() || "Hyderabad",
-      selectedSort
-    );
+    // Update Redux state for filters
+    dispatch(setPropertyIn(selectedBuildingType));
+    dispatch(setSubType(selectedSubPropertyType));
+    dispatch(setBHK(selectedBedrooms));
+    dispatch(setOccupancy(selectedPossession));
+    dispatch(setPrice(selectedSort)); // Update Redux price
+    fetchProperties(true, updatedFilters, localSearchQuery.trim() || "Hyderabad");
     onCloseFilter();
   };
 
-  // Clear all filters
   const clearAllFilters = () => {
     setSelectedBuildingType("Residential");
     setSelectedSubPropertyType("");
     setSelectedBedrooms("");
-    setSelectedFurnishing("");
-    setSelectedPostedBy("");
-    setSelectedAmenities([]);
     setSelectedPossession("");
+    setSelectedSort("Relevance");
     const defaultFilters = {
-      building_type: "Residential",
-      property_type: "",
+      property_for: mapTabToPropertyFor(tab),
+      property_in: "",
+      sub_type: "",
+      search: "",
       bedrooms: "",
-      furnishing_status: "",
-      posted_by: "",
-      amenities: [],
-      possession_status: "",
+      property_cost: "",
+      priceFilter: "Relevance",
+      occupancy: "",
+      property_status: 1,
     };
     setFilters(defaultFilters);
-    fetchProperties(
-      true,
-      defaultFilters,
-      localSearchQuery.trim() || "Hyderabad",
-      selectedSort
-    );
+    // Clear Redux state
+    dispatch(setPropertyIn(""));
+    dispatch(setSubType(""));
+    dispatch(setBHK(""));
+    dispatch(setOccupancy(""));
+    dispatch(setLocation(""));
+    dispatch(setPrice("Relevance")); // Clear Redux price
+    fetchProperties(true, defaultFilters, "Hyderabad");
     onCloseFilter();
   };
 
   // Handle sort selection
   const handleSortSelect = (sortOption) => {
     setSelectedSort(sortOption);
-    fetchProperties(
-      true,
-      filters,
-      localSearchQuery.trim() || "Hyderabad",
-      sortOption
-    );
+    const updatedFilters = { ...filters, priceFilter: sortOption };
+    setFilters(updatedFilters);
+    dispatch(setPrice(sortOption)); // Update Redux price
+    fetchProperties(true, updatedFilters, localSearchQuery.trim() || "Hyderabad");
     onCloseSort();
   };
+
+
 
   return (
     <View style={styles.container}>
@@ -373,19 +398,14 @@ const SearchBarProperty = ({
               <FilterSection title="Property Type">
                 <View style={styles.filterOptionsGrid}>
                   <FilterOption
-                    label="Plot"
-                    selected={selectedSubPropertyType === "Plot"}
-                    onPress={() => toggleSubPropertyType("Plot")}
-                  />
-                  <FilterOption
                     label="Apartment"
                     selected={selectedSubPropertyType === "Apartment"}
                     onPress={() => toggleSubPropertyType("Apartment")}
                   />
                   <FilterOption
-                    label="Villa"
-                    selected={selectedSubPropertyType === "Villa"}
-                    onPress={() => toggleSubPropertyType("Villa")}
+                    label="Independent Villa"
+                    selected={selectedSubPropertyType === "Independent Villa"}
+                    onPress={() => toggleSubPropertyType("Independent Villa")}
                   />
                   <FilterOption
                     label="Independent House"
@@ -393,14 +413,19 @@ const SearchBarProperty = ({
                     onPress={() => toggleSubPropertyType("Independent House")}
                   />
                   <FilterOption
-                    label="Builder Floor"
-                    selected={selectedSubPropertyType === "Builder Floor"}
-                    onPress={() => toggleSubPropertyType("Builder Floor")}
+                    label="Plot"
+                    selected={selectedSubPropertyType === "Plot"}
+                    onPress={() => toggleSubPropertyType("Plot")}
                   />
                   <FilterOption
-                    label="Penthouse"
-                    selected={selectedSubPropertyType === "Penthouse"}
-                    onPress={() => toggleSubPropertyType("Penthouse")}
+                    label="Land"
+                    selected={selectedSubPropertyType === "Land"}
+                    onPress={() => toggleSubPropertyType("Land")}
+                  />
+                  <FilterOption
+                    label="Others"
+                    selected={selectedSubPropertyType === "Others"}
+                    onPress={() => toggleSubPropertyType("Others")}
                   />
                 </View>
               </FilterSection>
@@ -411,11 +436,7 @@ const SearchBarProperty = ({
                     selected={selectedBedrooms === "1 BHK"}
                     onPress={() => toggleBedroom("1 BHK")}
                   />
-                  <FilterOption
-                    label="1 RK"
-                    selected={selectedBedrooms === "1 RK"}
-                    onPress={() => toggleBedroom("1 RK")}
-                  />
+                
                   <FilterOption
                     label="2 BHK"
                     selected={selectedBedrooms === "2 BHK"}
@@ -444,13 +465,18 @@ const SearchBarProperty = ({
                     onPress={() => toggleBedroom("6 BHK")}
                   />
                   <FilterOption
-                    label="Studio"
-                    selected={selectedBedrooms === "Studio"}
-                    onPress={() => toggleBedroom("Studio")}
+                    label="7 BHK"
+                    selected={selectedBedrooms === "7 BHK"}
+                    onPress={() => toggleBedroom("7 BHK")}
+                  />
+                   <FilterOption
+                    label="8 BHK"
+                    selected={selectedBedrooms === "8 BHK"}
+                    onPress={() => toggleBedroom("8 BHK")}
                   />
                 </View>
               </FilterSection>
-              <FilterSection title="Furnishing Status">
+              {/* <FilterSection title="Furnishing Status">
                 <View style={styles.filterOptionsRow}>
                   <FilterOption
                     label="Furnished"
@@ -475,8 +501,8 @@ const SearchBarProperty = ({
                     onPress={() => toggleFurnishing("Gated")}
                   />
                 </View>
-              </FilterSection>
-              <FilterSection title="Posted By">
+              </FilterSection> */}
+              {/* <FilterSection title="Posted By">
                 <View style={styles.filterOptionsRow}>
                   <FilterOption
                     label="Owner"
@@ -489,8 +515,8 @@ const SearchBarProperty = ({
                     onPress={() => togglePostedBy("Partner Agents")}
                   />
                 </View>
-              </FilterSection>
-              <FilterSection title="Amenities">
+              </FilterSection> */}
+              {/* <FilterSection title="Amenities">
                 <View style={styles.filterOptionsRow}>
                   <FilterOption
                     label="24*7 Security"
@@ -534,7 +560,7 @@ const SearchBarProperty = ({
                     onPress={() => toggleAmenity("Waiting/ Reception Room")}
                   />
                 </View>
-              </FilterSection>
+              </FilterSection> */}
               <FilterSection title="Possession Status">
                 <View style={styles.filterOptionsRow}>
                   <FilterOption
@@ -605,10 +631,12 @@ const styles = StyleSheet.create({
   },
   searchWrapper: {
     flex: 0.8,
+    position: "relative", 
   },
   sortWrapper: {
     flex: 0.2,
     marginLeft: 5,
+    
   },
   searchContainer: {
     flexDirection: "row",

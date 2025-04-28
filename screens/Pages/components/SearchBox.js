@@ -32,8 +32,16 @@ import { PropertyTypeIcon } from "./SearchBarComponents/PropertyIcon";
 import { FilterSection } from "./SearchBarComponents/FilterSection";
 import { FilterOption } from "./SearchBarComponents/FilterOption";
 import SearchBarSection from "./SearchBarComponents/SearchBarSection";
+import { setBHK, setOccupancy, setPropertyIn, setSearchData, setSubType,setLocation } from "../../../store/slices/searchSlice";
 
 export default function SearchBox() {
+  const tab = useSelector((state)=> state.search.tab);
+  const propertyIn = useSelector((state) => state.search.property_in); 
+  const subType = useSelector((state) => state.search.sub_type);
+  const bhk = useSelector((state) => state.search.bhk);
+  const occupancy = useSelector((state)=>state.search.occupancy);
+  const location = useSelector((state)=> state.search.location);
+  console.log("search",tab,propertyIn,subType,bhk,occupancy,location);
   const dispatch = useDispatch();
   const navigation = useNavigation();
   const { isOpen, onOpen, onClose } = useDisclose();
@@ -43,29 +51,76 @@ export default function SearchBox() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [userLocation, setUserLocation] = useState("");
-  const [selectedPropertyType, setSelectedPropertyType] = useState("Buy");
-  const [selectedBuildingType, setSelectedBuildingType] = useState("Residential");
-  const [selectedSubPropertyType, setSelectedSubPropertyType] = useState("");
-  const [selectedBedrooms, setSelectedBedrooms] = useState("");
+  const [userLocation, setUserLocation] = useState(location || "");
+  const [selectedPropertyType, setSelectedPropertyType] = useState(tab || "Buy");
+  const [selectedBuildingType, setSelectedBuildingType] = useState(propertyIn || "Residential");
+  const [selectedSubPropertyType, setSelectedSubPropertyType] = useState(subType || "Apartment");
+  const [selectedBedrooms, setSelectedBedrooms] = useState(bhk || "");
   const [selectedFurnishing, setSelectedFurnishing] = useState("");
   const [selectedPostedBy, setSelectedPostedBy] = useState("");
   const [selectedAmenities, setSelectedAmenities] = useState([]);
-  const [selectedPossession, setSelectedPossession] = useState("");
+  const [selectedPossession, setSelectedPossession] = useState(occupancy || "");
   const inputRef = useRef(null);
 
   // Toggle functions
   const togglePropertyType = (type) => setSelectedPropertyType(type);
-  const toggleBuildingType = (type) => setSelectedBuildingType(type);
-  const toggleSubPropertyType = (type) => setSelectedSubPropertyType(type);
-  const toggleBedroom = (type) => setSelectedBedrooms(type);
+  const toggleBuildingType = (type) => {
+    setSelectedBuildingType(type);
+    dispatch(setPropertyIn(type));
+  };
+  const toggleSubPropertyType = (type) => {
+    const validSubTypes = [
+      "Apartment",
+      "Independent Villa",
+      "Independent House",
+      "Plot",
+      "Land",
+      "Others",
+    ];
+    if (validSubTypes.includes(type)) {
+      setSelectedSubPropertyType(type);
+      dispatch(setSubType(type));
+      // Reset bhk for Plot, Land, or Others
+      if (["Plot", "Land", "Others"].includes(type)) {
+        setSelectedBedrooms("");
+        dispatch(setBHK(null)); // Set bhk to null in Redux
+      }
+    }
+  };
+
+
+  const toggleBedroom = (type) => {
+    const validBHKs = [
+      "1 BHK",
+      "2 BHK",
+      "3 BHK",
+      "4 BHK",
+      "5 BHK",
+      "6 BHK",
+      "7 BHK",
+      "8 BHK",
+    ];
+    if (validBHKs.includes(type)) {
+      setSelectedBedrooms(type);
+      dispatch(setBHK(type)); 
+    }
+  }; 
+
+
   const toggleFurnishing = (type) => setSelectedFurnishing(type);
   const togglePostedBy = (type) => setSelectedPostedBy(type);
   const toggleAmenity = (type) =>
     setSelectedAmenities((prev) =>
       prev.includes(type) ? prev.filter((item) => item !== type) : [...prev, type]
     );
-  const togglePossession = (type) => setSelectedPossession(type);
+    const togglePossession = (type) => {
+      const validPossessionStatuses = ["Ready to Move", "Under Construction"];
+      if (validPossessionStatuses.includes(type)) {
+        setSelectedPossession(type);
+        dispatch(setOccupancy(type)); 
+      }
+    };
+
 
   // Fetch cities
   useEffect(() => {
@@ -169,12 +224,7 @@ export default function SearchBox() {
 
  
   const handlePropertiesLists = () => {
-    console.log(searchQuery);
-    console.log(selectedLocation);
-    navigation.navigate("PropertyList", {
-      prevSearch: searchQuery,
-      prevLocation: selectedLocation,
-    });
+    navigation.navigate("PropertyList",);
   };
 
   
@@ -204,25 +254,34 @@ export default function SearchBox() {
             type="Buy"
             icon="home"
             selected={selectedPropertyType === "Buy"}
-            onPress={() => togglePropertyType("Buy")}
-          />
+            onPress={() =>{
+              dispatch(setSearchData({tab:"Buy"}))
+              togglePropertyType("Buy")}}
+            />
+          
           <PropertyTypeIcon
             type="Rent"
             icon="key"
             selected={selectedPropertyType === "Rent"}
-            onPress={() => togglePropertyType("Rent")}
+            onPress={() =>{
+            dispatch(setSearchData({tab:"Rent"}))
+             togglePropertyType("Rent")}}
           />
           <PropertyTypeIcon
             type="Plot"
             icon="map"
             selected={selectedPropertyType === "Plot"}
-            onPress={() => togglePropertyType("Plot")}
+            onPress={() =>{
+              dispatch(setSearchData({tab:"Plot"}))
+                           togglePropertyType("Plot")}}
           />
           <PropertyTypeIcon
             type="Commercial"
             icon="building"
             selected={selectedPropertyType === "Commercial"}
-            onPress={() => togglePropertyType("Commercial")}
+            onPress={() =>{
+              dispatch(setSearchData({tab:"Commercial"}))
+              togglePropertyType("Commercial")}}
           />
         </View>
         </View>
@@ -230,6 +289,7 @@ export default function SearchBox() {
         <SearchBarSection
           selectedCity={selectedLocation}
           setSearchQuery={setSearchQuery}
+          setLocation={(location) => dispatch(setLocation(location))} // Pass setLocation
         />
 
         {/* Filter Sections */}
@@ -238,48 +298,49 @@ export default function SearchBox() {
             <FilterOption
               label="Residential"
               selected={selectedBuildingType === "Residential"}
-              onPress={() => toggleBuildingType("Residential")}
+              onPress={() => toggleBuildingType("Residential")} // Calls toggleBuildingType
               checkmark={true}
             />
             <FilterOption
               label="Commercial"
               selected={selectedBuildingType === "Commercial"}
-              onPress={() => toggleBuildingType("Commercial")}
+              onPress={() => toggleBuildingType("Commercial")} // Calls toggleBuildingType
               checkmark={true}
             />
           </View>
         </FilterSection>
         <FilterSection title="Property Type">
           <View style={styles.filterOptionsGrid}>
-            <FilterOption
-              label="Plot"
-              selected={selectedSubPropertyType === "Plot"}
-              onPress={() => toggleSubPropertyType("Plot")}
-            />
+           
             <FilterOption
               label="Apartment"
               selected={selectedSubPropertyType === "Apartment"}
               onPress={() => toggleSubPropertyType("Apartment")}
             />
             <FilterOption
-              label="Villa"
-              selected={selectedSubPropertyType === "Villa"}
-              onPress={() => toggleSubPropertyType("Villa")}
+              label="Independent Villa"
+              selected={selectedSubPropertyType === "Independent Villa"}
+              onPress={() => toggleSubPropertyType("Independent Villa")}
             />
             <FilterOption
               label="Independent House"
               selected={selectedSubPropertyType === "Independent House"}
               onPress={() => toggleSubPropertyType("Independent House")}
             />
-            <FilterOption
-              label="Builder Floor"
-              selected={selectedSubPropertyType === "Builder Floor"}
-              onPress={() => toggleSubPropertyType("Builder Floor")}
+             <FilterOption
+              label="Plot"
+              selected={selectedSubPropertyType === "Plot"}
+              onPress={() => toggleSubPropertyType("Plot")}
             />
             <FilterOption
-              label="Penthouse"
-              selected={selectedSubPropertyType === "Penthouse"}
-              onPress={() => toggleSubPropertyType("Penthouse")}
+              label="Land"
+              selected={selectedSubPropertyType === "Land"}
+              onPress={() => toggleSubPropertyType("Land")}
+            />
+            <FilterOption
+              label="Others"
+              selected={selectedSubPropertyType === "Others"}
+              onPress={() => toggleSubPropertyType("Others")}
             />
           </View>
         </FilterSection>
@@ -291,11 +352,6 @@ export default function SearchBox() {
               onPress={() => toggleBedroom("1 BHK")}
             />
             <FilterOption
-              label="1 RK"
-              selected={selectedBedrooms === "1 RK"}
-              onPress={() => toggleBedroom("1 RK")}
-            />
-            <FilterOption
               label="2 BHK"
               selected={selectedBedrooms === "2 BHK"}
               onPress={() => toggleBedroom("2 BHK")}
@@ -305,13 +361,13 @@ export default function SearchBox() {
               selected={selectedBedrooms === "3 BHK"}
               onPress={() => toggleBedroom("3 BHK")}
             />
-          </View>
-          <View style={styles.filterOptionsRow}>
             <FilterOption
               label="4 BHK"
               selected={selectedBedrooms === "4 BHK"}
               onPress={() => toggleBedroom("4 BHK")}
             />
+          </View>
+          <View style={styles.filterOptionsRow}>
             <FilterOption
               label="5 BHK"
               selected={selectedBedrooms === "5 BHK"}
@@ -323,13 +379,18 @@ export default function SearchBox() {
               onPress={() => toggleBedroom("6 BHK")}
             />
             <FilterOption
-              label="Studio"
-              selected={selectedBedrooms === "Studio"}
-              onPress={() => toggleBedroom("Studio")}
+              label="7 BHK"
+              selected={selectedBedrooms === "7 BHK"}
+              onPress={() => toggleBedroom("7 BHK")}
+            />
+            <FilterOption
+              label="8 BHK"
+              selected={selectedBedrooms === "8 BHK"}
+              onPress={() => toggleBedroom("8 BHK")}
             />
           </View>
         </FilterSection>
-        <FilterSection title="Furnishing Status">
+        {/* <FilterSection title="Furnishing Status">
           <View style={styles.filterOptionsRow}>
             <FilterOption
               label="Furnished"
@@ -413,7 +474,7 @@ export default function SearchBox() {
               onPress={() => toggleAmenity("Waiting/ Reception Room")}
             />
           </View>
-        </FilterSection>
+        </FilterSection> */}
         <FilterSection title="Possession Status">
           <View style={styles.filterOptionsRow}>
             <FilterOption

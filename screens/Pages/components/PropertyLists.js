@@ -1,11 +1,5 @@
-import React, { useState, useCallback, useEffect, useRef, memo } from "react";
+import { useState, useCallback, useEffect, useRef, memo } from "react";
 import {
-  ScrollView,
-  TouchableOpacity,
-  Platform,
-  StyleSheet,
-  TextInput,
-  ActivityIndicator,
   View,
   Text,
   FlatList,
@@ -14,27 +8,24 @@ import {
   Pressable,
   Spinner,
   IconButton,
-  Actionsheet,
-  useDisclose,
   VStack,
   Box,
   Toast,
 } from "native-base";
 import { useNavigation } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { shallowEqual, useDispatch, useSelector } from "react-redux";
-import { addFavourite } from "../../../store/slices/favourites";
+import { useDispatch, useSelector } from "react-redux";
 import { setPropertyDetails } from "../../../store/slices/propertyDetails";
 import config from "../../../config";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
-import { BackHandler } from "react-native";
+import { BackHandler,StyleSheet,RefreshControl } from "react-native";
 import UserAvatar from "./propertyDetailsComponents/UserAvatar";
 import WhatsAppIcon from '../../../assets/propertyicons/whatsapp.png';
 import ApprovedIcon from '../../../assets/propertyicons/approved.png';
 import SearchBarProperty from "./propertyDetailsComponents/SearchBarProperty";
-import ContactActionSheet from "./propertyDetailsComponents/ContactActionSheet";
 import FilterBar from "./propertyDetailsComponents/FilterBar";
+import debounce from "lodash/debounce";
 
 const userTypeMap = {
   3: "Builder",
@@ -154,6 +145,16 @@ const PropertyCard = memo(
   }
 );
 
+const mapTabToPropertyFor = (tab) => {
+  const mapping = {
+    Buy: "Sell",
+    Rent: "Rent",
+    Plot: "Plot",
+    Commercial: "Commercial",
+  };
+  return mapping[tab] || "Sell"; // Default to "Sell" if tab is invalid
+};
+
 const formatToIndianCurrency = (value) => {
   if (value >= 10000000) return (value / 10000000).toFixed(2) + " Cr";
   if (value >= 100000) return (value / 100000).toFixed(2) + " L";
@@ -163,89 +164,149 @@ const formatToIndianCurrency = (value) => {
 
 export default function PropertyLists({ route }) {
   const { prevSearch } = route.params || {};
+  const [propertyLoading, setPropertyLoading] = useState(false);
+  console.log(propertyLoading)
+  const maxLimit = 50;
   const dispatch = useDispatch();
-  const flatListRef = useRef(null);
   const navigation = useNavigation();
+  const flatListRef = useRef(null);
   const [properties, setProperties] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [propertyLoading, setPropertyLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [paginationLoading, setPaginationLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [hasMore, setHasMore] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showScrollToTop, setShowScrollToTop] = useState(false);
   const [page, setPage] = useState(1);
-  const [searchQuery, setSearchQuery] = useState("");
-  const maxLimit = 50;
-
-  const { isOpen: isFilterOpen, onOpen: onOpenFilter, onClose: onCloseFilter } = useDisclose();
+  const [searchQuery, setSearchQuery] = useState(prevSearch || "");
   const [userDetails, setUserDetails] = useState(null);
-
-  const [filters, setFilters] = useState({
-    property_for: "",
-    property_type: "",
-    bedrooms: "",
-    possession_status: "",
-    min_price_range: 1000,
-    max_price_range: 30000000,
-  });
-
   const [selectedPropertyId, setSelectedPropertyId] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
-
   const locationCacheRef = useRef({});
+
+  const { tab, property_in, sub_type, bhk, occupancy, location,price } = useSelector(
+    (state) => state.search
+  );
+
+
+  const [filters, setFilters] = useState({
+    property_for: mapTabToPropertyFor(tab) || "Sell",
+    property_in: property_in || "Residential",
+    sub_type: sub_type || "Apartment",
+    search: location || prevSearch || "",
+    bedrooms: bhk || "",
+    property_cost: "",
+    priceFilter: price || "Relevance",
+    occupancy: occupancy || "",
+    property_status: 1,
+  });
+
+   // Update filters when Redux state changes
+   useEffect(() => {
+    setFilters((prev) => ({
+      ...prev,
+      property_for: mapTabToPropertyFor(tab) || prev.property_for,
+      property_in: property_in || prev.property_in,
+      sub_type: sub_type || prev.sub_type,
+      bedrooms: bhk || prev.bedrooms,
+      occupancy: occupancy || prev.occupancy,
+      search: location || prev.search,
+      priceFilter: price || prev.priceFilter, 
+      
+    }));
+    setSearchQuery(location || prevSearch || "");
+    setPage(1);
+    setProperties([]);
+    fetchProperties(true, {
+      property_for: mapTabToPropertyFor(tab) || "Sell",
+      property_in: property_in || "Residential",
+      sub_type: sub_type || "Apartment",
+      search: location || prevSearch || "",
+      bedrooms: bhk || "",
+      property_cost: "",
+      priceFilter: price || "Relevance", // Use Redux price
+      occupancy: occupancy || "",
+      property_status: 1,
+    });
+  }, [tab, property_in, sub_type, bhk, occupancy, location,price, prevSearch]);
+
+  const preloadImages = useCallback((nextProperties) => {
+    const imageUrls = nextProperties
+      .slice(0, 4)
+      .map((item) =>
+        item?.image && item.image.trim() !== ""
+          ? `https://api.meetowner.in/uploads/${item.image}`
+          : `https://placehold.co/200x100@3x.png?text=${item?.property_name || "Property"}`
+      )
+      .filter(Boolean);
+    imageUrls.forEach((url) => Image.prefetch(url).catch((err) => console.warn("Image prefetch failed:", err)));
+  }, []);
+
+  const mapPriceFilterToApiValue = (priceFilter) => {
+    const validFilters = ["Relevance", "Price: Low to High", "Price: High to Low", "Newest First"];
+    return validFilters.includes(priceFilter) ? priceFilter : "Relevance";
+  };
+
 
   const fetchProperties = useCallback(
     async (reset = false, appliedFilters = filters, searchedLocation) => {
       if (!hasMore && !reset) return;
-      setPropertyLoading(true);
+      if (reset) setInitialLoading(true);
+      else setPaginationLoading(true);
+      setError(null);
       try {
         const storedDetails = await AsyncStorage.getItem("userdetails");
         if (!storedDetails) {
-          setPropertyLoading(false);
+          setError("User details not found. Please log in.");
           return;
         }
         const parsedUserDetails = JSON.parse(storedDetails);
         setUserDetails(parsedUserDetails);
-        const locationToSearch = (searchedLocation || prevSearch || "Hyderabad").toLowerCase();
+
+        const locationToSearch = (searchedLocation || appliedFilters.search || "Hyderabad").toLowerCase();
         const pageToFetch = reset ? 1 : page;
 
-        if (locationCacheRef.current[locationToSearch] && !reset && pageToFetch === 1) {
-          setProperties(locationCacheRef.current[locationToSearch].slice(0, maxLimit));
+        // Create a cache key based on all filters
+        const cacheKey = `${locationToSearch}_${JSON.stringify(appliedFilters)}`;
+        if (locationCacheRef.current[cacheKey] && !reset && pageToFetch === 1) {
+          setProperties(locationCacheRef.current[cacheKey]);
           setHasMore(true);
-          setPropertyLoading(false);
+          preloadImages(locationCacheRef.current[cacheKey]);
           return;
         }
 
         const queryParams = new URLSearchParams({
           page: pageToFetch,
-          property_for: appliedFilters.property_for
-            ? appliedFilters.property_for === "Buy"
-              ? "Sell"
-              : appliedFilters.property_for
-            : "Sell",
-          property_in: appliedFilters.building_type || "Residential",
-          sub_type: appliedFilters.property_type || "Apartment",
+          property_for: appliedFilters.property_for || "Sell",
+          property_in: appliedFilters.property_in || "",
+          sub_type: appliedFilters.sub_type || "",
           search: locationToSearch,
           bedrooms: appliedFilters.bedrooms ? appliedFilters.bedrooms.replace(" BHK", "") : "",
-          property_cost: appliedFilters.max_price_range || "",
-          priceFilter: appliedFilters.sort || "Relevance",
-          occupancy: appliedFilters.possession_status || "",
+          property_cost: appliedFilters.property_cost || "",
+          priceFilter: encodeURIComponent(mapPriceFilterToApiValue(appliedFilters.priceFilter)),
+          occupancy: appliedFilters.occupancy || "",
           property_status: "1",
         }).toString();
 
+        console.log("Query Params:", queryParams);
+
         const url = `https://api.meetowner.in/listings/v1/getAllPropertiesByType?${queryParams}`;
+        console.log("API URL:", url);
         const response = await fetch(url);
+        if (!response.ok) throw new Error(`API error: ${response.status}`);
         const data = await response.json();
 
         if (data?.properties?.length > 0) {
           setProperties((prev) => {
-            const combined = reset ? data.properties : [...prev, ...data.properties];
-            return combined.slice(0, maxLimit);
+            const newProperties = reset ? data.properties : [...prev, ...data.properties];
+            preloadImages(data.properties);
+            return newProperties;
           });
           setPage(pageToFetch + 1);
-          setHasMore(data.current_page < data.total_pages && properties.length < maxLimit);
+          setHasMore(data.current_page < data.total_pages);
           if (reset || pageToFetch === 1) {
-            locationCacheRef.current[locationToSearch] = data.properties;
+            locationCacheRef.current[cacheKey] = data.properties;
           }
         } else {
           if (reset) setProperties([]);
@@ -253,37 +314,27 @@ export default function PropertyLists({ route }) {
         }
       } catch (error) {
         console.error("Error fetching properties:", error);
+        setError("Failed to load properties. Please try again.");
         if (reset) setProperties([]);
         setHasMore(false);
       } finally {
-        setPropertyLoading(false);
+        setInitialLoading(false);
+        setPaginationLoading(false);
         if (reset) setRefreshing(false);
       }
     },
-    [filters, page, prevSearch, hasMore, properties.length]
+    [page, hasMore, preloadImages]
   );
 
   useEffect(() => {
-    setSearchQuery(prevSearch || "");
-    fetchProperties(true, filters, prevSearch || "Hyderabad");
-  }, [prevSearch, filters, fetchProperties]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      onRefresh();
-    }, 2 * 60 * 1000);
-    return () => clearInterval(interval);
+    fetchProperties(true, filters, location || prevSearch || "Hyderabad");
   }, []);
+
 
   const handleInterestAPI = async (unique_property_id, action) => {
     try {
       const url = `${config.mainapi_url}/favourites_exe.php?user_id=${userDetails?.user_id}&unique_property_id=${unique_property_id}&action=0&intrst=1&name=${userDetails?.name}&mobile=${userDetails?.mobile}&email=${userDetails?.email}`;
-      await fetch(url, {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-        },
-      });
+      await fetch(url, { method: "POST", headers: { Accept: "application/json" } });
       await fetch(
         `${config.mainapi_url}/favourites_exe?user_id=${userDetails.user_id}&unique_property_id=${unique_property_id}&intrst=1&action=${action}`
       );
@@ -299,66 +350,54 @@ export default function PropertyLists({ route }) {
     }
   };
 
-  useEffect(() => {
-    const backAction = () => {
-      if (navigation.canGoBack()) {
-        navigation.goBack();
-      } else {
-        Alert.alert("Exit App", "Do you want to exit?", [
-          { text: "Cancel", style: "cancel" },
-          { text: "Exit", onPress: () => BackHandler.exitApp() },
-        ]);
-      }
-      return true;
-    };
-    const backHandler = BackHandler.addEventListener("hardwareBackPress", backAction);
-    return () => backHandler.remove();
-  }, [navigation]);
-
   const handleMetrics = async (property, type) => {
-    await axios.post("https://api.meetowner.in/metrics/saveAnalytics", {
-      user_id: userDetails?.user_id || "",
-      user_name: userDetails?.name || "",
-      mobile_number: userDetails?.mobile || "",
-      location: property?.google_address || "N/A",
-      searched_query: property?.property_name || "N/A",
-      unique_property_id: property?.unique_property_id || "N/A",
-      userContacts: "",
-      intrest_type: type || "",
-      created_at: "",
-    });
-  };
-
-  const [owner, setOwner] = useState("");
-
-  const getOwnerDetails = async () => {
-    const response = await fetch(
-      `https://api.meetowner.in/listings/getsingleproperty?unique_property_id=${selectedPropertyId?.unique_property_id}`
-    );
-    const data = await response.json();
-    const propertydata = data.property_details;
-    const sellerdata = propertydata.seller_details;
-    if (response.status === 200) {
-      setOwner(sellerdata);
+    try {
+      await axios.post("https://api.meetowner.in/metrics/saveAnalytics", {
+        user_id: userDetails?.user_id || "",
+        user_name: userDetails?.name || "",
+        mobile_number: userDetails?.mobile || "",
+        location: property?.google_address || "N/A",
+        searched_query: property?.property_name || "N/A",
+        unique_property_id: property?.unique_property_id || "N/A",
+        userContacts: "",
+        intrest_type: type || "",
+        created_at: "",
+      });
+    } catch (error) {
+      console.error("Error saving metrics:", error);
     }
   };
 
-  const handleAPI = async () => {
-    await getOwnerDetails();
+  const getOwnerDetails = async (unique_property_id) => {
+    try {
+      const response = await fetch(
+        `https://api.meetowner.in/listings/getsingleproperty?unique_property_id=${unique_property_id}`
+      );
+      if (!response.ok) throw new Error(`API error: ${response.status}`);
+      const data = await response.json();
+      return data.property_details?.seller_details || {};
+    } catch (error) {
+      console.error("Error fetching owner details:", error);
+      return {};
+    }
+  };
+
+  const handleAPI = async (item) => {
+    const owner = await getOwnerDetails(item.unique_property_id);
     const payload = {
       channelId: "67a9e14542596631a8cfc87b",
       channelType: "whatsapp",
-      recipient: { name: owner?.name, phone: `91${owner?.mobile}` },
+      recipient: { name: owner?.name || "Unknown", phone: `91${owner?.mobile}` },
       whatsapp: {
         type: "template",
         template: {
           templateName: "leads_information_for_partners_clone",
           bodyValues: {
-            name: userDetails?.name,
-            phone: userDetails?.mobile,
-            variable_3: selectedPropertyId?.property_subtype || selectedPropertyId?.sub_type || "Property",
-            variable_4: selectedPropertyId?.property_name,
-            variable_5: selectedPropertyId?.google_address.split(",")[0].trim(),
+            name: userDetails?.name || "User",
+            phone: userDetails?.mobile || "",
+            variable_3: item?.sub_type || "Property",
+            variable_4: item?.property_name || "N/A",
+            variable_5: item?.google_address?.split(",")[0]?.trim() || "N/A",
           },
         },
       },
@@ -369,8 +408,7 @@ export default function PropertyLists({ route }) {
       "Content-Type": "application/json",
     };
     try {
-      const url = "https://server.gallabox.com/devapi/messages/whatsapp";
-      const response = await axios.post(url, payload, { headers });
+      await axios.post("https://server.gallabox.com/devapi/messages/whatsapp", payload, { headers });
       Toast.show({
         duration: 1000,
         placement: "top-right",
@@ -382,22 +420,37 @@ export default function PropertyLists({ route }) {
       });
     } catch (error) {
       console.error("Error in handleAPI:", error);
+      Toast.show({
+        placement: "top-right",
+        render: () => (
+          <Box bg="red.300" px="2" py="1" mr={5} rounded="sm" mb={5}>
+            Failed to send WhatsApp message.
+          </Box>
+        ),
+      });
     }
   };
 
-  const handleIntrests = async (type, property, userDetails) => {
-    await handleMetrics(property, userDetails, type);
-  };
-
-  const handleFavourites = useCallback(async (type, item, action) => {
-    try {
-      await handleAPI();
-      await handleInterestAPI(item.unique_property_id, action);
-      await handleIntrests(type, item, userDetails);
-    } catch (error) {
-      console.error("Error in handleFavourites:", error);
-    }
-  }, [userDetails]);
+  const handleFavourites = useCallback(
+    async (type, item, action) => {
+      try {
+        await handleAPI(item);
+        await handleInterestAPI(item.unique_property_id, action);
+        await handleMetrics(item, type);
+      } catch (error) {
+        console.error("Error in handleFavourites:", error);
+        Toast.show({
+          placement: "top-right",
+          render: () => (
+            <Box bg="red.300" px="2" py="1" mr={5} rounded="sm" mb={5}>
+              Failed to add favourite.
+            </Box>
+          ),
+        });
+      }
+    },
+    [userDetails]
+  );
 
   const handleNavigate = useCallback(
     (item) => {
@@ -407,11 +460,14 @@ export default function PropertyLists({ route }) {
     [navigation, dispatch]
   );
 
-  const getItemLayout = (_, index) => ({
-    length: 180,
-    offset: 180 * index,
-    index,
-  });
+  const getItemLayout = useCallback(
+    (_, index) => ({
+      length: 300,
+      offset: 300 * index,
+      index,
+    }),
+    []
+  );
 
   const contactNow = (item) => {
     setSelectedItem(item);
@@ -420,7 +476,7 @@ export default function PropertyLists({ route }) {
   };
 
   const handleSubmit = (formData) => {
-    console.log("Submitted Details:", formData, "for item:", selectedItem);
+    
     setModalVisible(false);
     setSelectedItem(null);
   };
@@ -429,12 +485,8 @@ export default function PropertyLists({ route }) {
     ({ item }) => (
       <PropertyCard
         item={item}
-        onPress={() => handleNavigate(item)}
-        onFav={(type, item, action) => {
-          setSelectedPropertyId(item);
-          handleFavourites(type, item, action);
-        }}
-        onNavigate={() => handleNavigate(item)}
+        onFav={handleFavourites}
+        onNavigate={handleNavigate}
         userDetails={userDetails}
         contactNow={contactNow}
       />
@@ -442,90 +494,102 @@ export default function PropertyLists({ route }) {
     [handleFavourites, handleNavigate, userDetails]
   );
 
-  const handleScroll = (event) => {
+  const handleScroll = useCallback((event) => {
     const offsetY = event.nativeEvent.contentOffset.y;
-    if (offsetY > 100 && !showScrollToTop) {
-      setShowScrollToTop(true);
-    } else if (offsetY <= 0 && showScrollToTop) {
-      setShowScrollToTop(false);
-    }
-  };
+    setShowScrollToTop(offsetY > 100);
+  }, []);
 
-  const scrollToTop = () => {
+  const scrollToTop = useCallback(() => {
     if (flatListRef.current) {
       flatListRef.current.scrollToOffset({ offset: 0, animated: true });
       setShowScrollToTop(false);
     }
-  };
+  }, []);
 
-  const onRefresh = () => {
+  const onRefresh = useCallback(() => {
     setRefreshing(true);
     setPage(1);
-    fetchProperties(true);
-  };
+    setProperties([]);
+    fetchProperties(true, filters, searchQuery || prevSearch || "Hyderabad");
+  }, [filters, prevSearch, fetchProperties]);
 
-  const loadMoreProperties = () => {
-    if (hasMore && !propertyLoading && properties.length < maxLimit) {
-      fetchProperties(false, filters, searchQuery || prevSearch || "Hyderabad");
+  const loadMoreProperties = useCallback(() => {
+    if (!paginationLoading && hasMore) {
+      fetchProperties(false);
     }
-  };
+  }, [paginationLoading, hasMore, fetchProperties]);
+  
 
-  const handleLocationSearch = (query) => {
-    setSearchQuery(query);
-    fetchProperties(true, filters, query);
-  };
+  const handleLocationSearch = useCallback(
+    (query) => {
+      setSearchQuery(query);
+      setPage(1);
+      setProperties([]);
+      fetchProperties(true, filters, query);
+    },
+    [filters, fetchProperties]
+  );
 
   return (
     <View style={styles.container}>
-      <View style={{ width: "100%", position: "relative" }}>
-        <SearchBarProperty
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          handleLocationSearch={handleLocationSearch}
-          fetchProperties={fetchProperties}
-          filters={filters}
-          setFilters={setFilters}
-        />
-        <FilterBar />
-      </View>
-
-      {propertyLoading ? (
+     <SearchBarProperty
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        handleLocationSearch={(query) => {
+          setSearchQuery(query);
+          fetchProperties(true, filters, query || "Hyderabad");
+        }}
+        fetchProperties={fetchProperties}
+        filters={filters}
+        setFilters={setFilters}
+        selectedCity="Hyderabad"
+      />
+      <FilterBar />
+      {error ? (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : initialLoading ? (
         <View style={styles.loadingContainer}>
           <Spinner size="lg" color="#1D3A76" />
           <Text style={styles.loadingText}>Loading Properties...</Text>
         </View>
-      ) : properties?.length > 0 ? (
+      ) : properties.length > 0 ? (
         <FlatList
           ref={flatListRef}
           data={properties}
-          keyExtractor={(item, index) => `${item.unique_property_id}-${index}`}
+          keyExtractor={(item) => item.unique_property_id}
           renderItem={renderPropertyCard}
           onEndReached={loadMoreProperties}
-          onEndReachedThreshold={0.3}
+          onEndReachedThreshold={0.7}
           onScroll={handleScroll}
           scrollEventThrottle={16}
           initialNumToRender={10}
-          maxToRenderPerBatch={8}
-          updateCellsBatchingPeriod={30}
-          windowSize={10}
-          removeClippedSubviews={true}
+          maxToRenderPerBatch={50}
+          windowSize={21}
+          updateCellsBatchingPeriod={50}
           getItemLayout={getItemLayout}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#1D3A76"]} />
+          }
           ListFooterComponent={
-            properties.length >= maxLimit ? (
-              <View style={styles.footerContainer}>
-                <Text style={styles.searchMoreText}>Please Search For More Properties</Text>
-              </View>
-            ) : propertyLoading ? (
+            paginationLoading ? (
               <View style={styles.loaderContainer}>
-                <ActivityIndicator size="small" color="#1D3A76" />
+                <Spinner size="small" color="#1D3A76" />
+              </View>
+            ) : !hasMore && properties.length > 0 ? (
+              <View style={styles.footerContainer}>
+                <Text style={styles.footerText}>No More Properties</Text>
               </View>
             ) : null
           }
         />
+
       ) : (
-        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-          <Text style={{ fontSize: 18, fontWeight: "bold" }}>
-            No Properties found! {filters?.property_type || searchQuery.split(",")[0].trim()}!
+        <View style={styles.noPropertiesContainer}>
+          <Text style={styles.noPropertiesText}>
+            No properties found for{" "}
+           
           </Text>
         </View>
       )}
@@ -541,20 +605,12 @@ export default function PropertyLists({ route }) {
           onPress={scrollToTop}
         />
       )}
-      <ContactActionSheet
-        isOpen={modalVisible}
-        onClose={() => {
-          setModalVisible(false);
-          setSelectedItem(null);
-        }}
-        onSubmit={handleSubmit}
-        userDetails={userDetails}
-        title="Contact Now"
-        type="contact"
-      />
+    
     </View>
   );
 }
+
+
 
 const styles = StyleSheet.create({
   container: {

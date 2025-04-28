@@ -5,6 +5,7 @@ import authSlice from "./slices/authSlice";
 import tabReducer from "./slices/tabSlices";
 import favourites from "./slices/favourites";
 import propertyDetails from "./slices/propertyDetails";
+import searchSlice from "./slices/searchSlice"
 const authPersistConfig = {
   key: "auth",
   storage: AsyncStorage,
@@ -15,6 +16,7 @@ const authPersistConfig = {
     "location",
     "subscriptionDetails",
     "userCity",
+    "search"
   ],
 };
 const persistedAuthReducer = persistReducer(authPersistConfig, authSlice);
@@ -24,6 +26,7 @@ const store = configureStore({
     tab: tabReducer,
     favourites: favourites,
     property: propertyDetails,
+    search:searchSlice
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

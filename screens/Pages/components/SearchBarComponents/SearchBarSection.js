@@ -6,29 +6,18 @@ import {
   ActivityIndicator,
   Platform,
 } from "react-native";
-import {
-  View,
-  FlatList,
-  KeyboardAvoidingView,
-  Image,
-  Text,
-} from "native-base";
+import { View, FlatList, Image, Text } from "native-base";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { debounce } from "lodash";
 import LocationImage from "../../../../assets/location_icon.png";
 
-export default function SearchBarSection({ selectedCity, setSearchQuery }) {
+export default function SearchBarSection({ selectedCity, setSearchQuery, setLocation }) {
   const navigation = useNavigation();
   const [localSearchQuery, setLocalSearchQuery] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(false);
   const inputRef = useRef(null);
-
-  // Sync local searchQuery with parent
-  useEffect(() => {
-    setLocalSearchQuery(localSearchQuery);
-  }, [localSearchQuery]);
 
   // Fetch suggestions based on city and query
   const fetchSuggestions = async (city, query) => {
@@ -39,7 +28,9 @@ export default function SearchBarSection({ selectedCity, setSearchQuery }) {
     setLoading(true);
     try {
       const response = await fetch(
-        `https://api.meetowner.in/api/v1/search?query=${encodeURIComponent(query)}&city=${encodeURIComponent(city)}`
+        `https://api.meetowner.in/api/v1/search?query=${encodeURIComponent(
+          query
+        )}&city=${encodeURIComponent(city)}`
       );
       const data = await response.json();
       // Map API response to expected format
@@ -68,19 +59,21 @@ export default function SearchBarSection({ selectedCity, setSearchQuery }) {
     () => (query) => {
       setLocalSearchQuery(query);
       setSearchQuery(query); // Update parent state
+      setLocation(query); // Update location in Redux
       if (query.trim().length >= 3 && selectedCity?.label) {
         debouncedFetchSuggestions(selectedCity.label, query);
       } else {
         setSuggestions([]);
       }
     },
-    [selectedCity, setSearchQuery]
+    [selectedCity, setSearchQuery, setLocation]
   );
 
   // Handle clear input
   const handleClear = () => {
     setLocalSearchQuery("");
     setSearchQuery("");
+    setLocation("");
     setSuggestions([]);
   };
 
@@ -91,6 +84,7 @@ export default function SearchBarSection({ selectedCity, setSearchQuery }) {
       onPress={() => {
         setLocalSearchQuery(item.label);
         setSearchQuery(item.label); // Update parent state with locality
+        setLocation(item.label); // Update location in Redux
         setSuggestions([]);
       }}
     >
@@ -168,7 +162,6 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 30,
   },
   clearButton: {
-
     justifyContent: "center",
     alignItems: "center",
     height: 60,
